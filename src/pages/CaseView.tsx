@@ -16,6 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import type Konva from 'konva';
 import type { Bloodstain, Case, Room, StainCalculations, SurfaceType, UnitSystem } from '@/types';
 import { analyzeScene, axisDiscrepancy, displayUnit, formatLength } from '@/lib/calculations';
+import { PATTERN_GROUPS } from '@/lib/bpa/patterns';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
 import { useCase } from '@/hooks/useCases';
 import { LengthInput } from '@/components/LengthInput';
@@ -466,6 +467,24 @@ function StainEditor({
               <option key={s} value={s}>
                 {s}
               </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Pattern type">
+          <select
+            value={stain.patternType ?? ''}
+            onChange={(e) => onChange({ patternType: e.target.value || undefined })}
+            className="min-h-[44px] w-full rounded-lg border border-surface-border bg-surface px-2 py-2 text-sm text-slate-100 focus:border-brand-500 focus:outline-none"
+          >
+            <option value="">— unclassified —</option>
+            {PATTERN_GROUPS.map((group) => (
+              <optgroup key={group.category} label={group.label}>
+                {group.types.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </Field>

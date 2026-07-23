@@ -35,6 +35,7 @@ export const sampleCase: Case = {
       id: 's1',
       stainId: 'BS-001',
       surface: 'floor',
+      patternType: 'impact',
       description: 'Elongated spatter, left side.',
       width: 5,
       length: 10, // 30° impact
@@ -71,6 +72,7 @@ export const sampleCase: Case = {
       id: 's4',
       stainId: 'BS-004',
       surface: 'north-wall',
+      patternType: 'cast-off',
       description: 'Cast-off on north wall.',
       width: 6,
       length: 12, // 30° impact

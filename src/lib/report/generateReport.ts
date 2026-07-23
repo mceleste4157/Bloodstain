@@ -16,6 +16,7 @@ import autoTable from 'jspdf-autotable';
 import type { Case } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatLength } from '@/lib/calculations';
+import { categoryCounts, patternLabel } from '@/lib/bpa/patterns';
 
 export interface ReportSketchImages {
   /** PNG data URL of the top-view sketch. */
@@ -94,14 +95,12 @@ export function generateReportDoc(
     return [
       s.stainId,
       s.surface,
+      patternLabel(s.patternType),
       formatLength(s.width, system),
       formatLength(s.length, system),
       c && Number.isFinite(c.widthToLengthRatio) ? c.widthToLengthRatio.toFixed(3) : '—',
       c?.impactAngleDeg == null ? 'check' : `${c.impactAngleDeg.toFixed(1)}°`,
       typeof s.directionality === 'number' ? `${s.directionality.toFixed(0)}°` : '—',
-      c?.position
-        ? `(${c.position.x.toFixed(0)}, ${c.position.y.toFixed(0)}, ${c.position.z.toFixed(0)})`
-        : '—',
     ];
   });
 
@@ -109,12 +108,34 @@ export function generateReportDoc(
     startY: y + 12,
     theme: 'striped',
     headStyles: { fillColor: [30, 64, 175] },
-    styles: { fontSize: 9, cellPadding: 3 },
-    head: [['Stain', 'Surface', 'Width', 'Length', 'W:L', 'Impact ∠', 'Dir.', 'Position (x,y,z) mm']],
+    styles: { fontSize: 8, cellPadding: 3 },
+    head: [['Stain', 'Surface', 'Pattern', 'Width', 'Length', 'W:L', 'Impact ∠', 'Dir.']],
     body: stainRows.length ? stainRows : [['—', '—', '—', '—', '—', '—', '—', '—']],
     margin: { left: MARGIN, right: MARGIN },
   });
   y = afterTableY(doc);
+
+  // ---- Pattern classification breakdown ----
+  if (kase.stains.length) {
+    const counts = categoryCounts(kase.stains.map((s) => s.patternType));
+    autoTable(doc, {
+      startY: y + 12,
+      theme: 'grid',
+      headStyles: { fillColor: [30, 64, 175] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      head: [['Pattern classification', 'Count']],
+      body: [
+        ['Passive', String(counts.passive)],
+        ['Spatter (impact / projected)', String(counts.spatter)],
+        ['Transfer / contact', String(counts.transfer)],
+        ['Altered', String(counts.altered)],
+        ['Other / unclassified', String(counts.other + kase.stains.filter((s) => !s.patternType).length)],
+      ],
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 220 } },
+      margin: { left: MARGIN, right: MARGIN },
+    });
+    y = afterTableY(doc);
+  }
 
   // ---- Calculated results ----
   const conv = analysis.convergence;

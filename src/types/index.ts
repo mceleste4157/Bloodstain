@@ -108,6 +108,8 @@ export interface Bloodstain {
   id: string;
   stainId: string; // human-facing label, e.g. "BS-001"
   surface: SurfaceType;
+  /** Pattern classification value from the BPA taxonomy (see lib/bpa/patterns). */
+  patternType?: string;
   description?: string;
 
   // --- Ellipse measurements (canonical unit: mm) ---
