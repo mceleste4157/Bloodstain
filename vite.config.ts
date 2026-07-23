@@ -11,6 +11,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // The legacy plain-HTML demo lives in public/; don't copy it into the build.
+  // Re-enable (or point elsewhere) when the React app gains static PWA assets.
+  publicDir: false,
   build: {
     // Firebase Hosting serves the production build from here (see firebase.json).
     outDir: 'dist',
