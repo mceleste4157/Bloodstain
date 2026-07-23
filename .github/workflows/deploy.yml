@@ -1,0 +1,61 @@
+name: Deploy to Firebase Hosting
+
+# Builds the React app and deploys Hosting + Firestore rules/indexes to the
+# bloodstain-c5531 Firebase project on every push to the branches below, and on
+# demand via the "Run workflow" button.
+on:
+  push:
+    branches:
+      - main
+      - claude/bpa-assistant-planning-16wstg
+  workflow_dispatch:
+
+# Prevent overlapping deploys from racing each other onto the live channel.
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Write service account credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT secret. Add it in" \
+                 "Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Deploy Hosting + Firestore rules & indexes
+        run: |
+          npx --yes firebase-tools@latest deploy \
+            --only hosting,firestore:rules,firestore:indexes \
+            --project bloodstain-c5531 \
+            --non-interactive
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
