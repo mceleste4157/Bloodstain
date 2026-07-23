@@ -68,6 +68,17 @@ export default function CaseView() {
     [draft],
   );
 
+  // Debounced autosave: persist ~900ms after the last edit. Each edit reschedules
+  // the timer, so a burst of typing results in a single write.
+  useEffect(() => {
+    if (!dirty || saving || !id || !draft) return;
+    const handle = setTimeout(() => void save(), 900);
+    return () => clearTimeout(handle);
+    // `save` is intentionally excluded; it is re-created each render and the
+    // effect already re-runs on every dependency that changes the save payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, saving, id, draft]);
+
   if (loading || !draft) {
     return (
       <Card>
@@ -151,11 +162,14 @@ export default function CaseView() {
     if (!id || !draft) return;
     setSaving(true);
     setSaveError(null);
+    // Optimistically clear the dirty flag; edits made during the async write set
+    // it true again and trigger a follow-up autosave. Restore it on failure.
+    setDirty(false);
     try {
       await updateCase(id, draft);
-      setDirty(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not save.');
+      setDirty(true);
     } finally {
       setSaving(false);
     }
@@ -197,6 +211,7 @@ export default function CaseView() {
           <h1 className="text-xl font-semibold">{draft.caseNumber || 'Untitled case'}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <SaveStatus saving={saving} dirty={dirty} error={saveError} onRetry={save} />
           <Button variant="danger" onClick={handleDelete}>
             Delete
           </Button>
@@ -206,12 +221,8 @@ export default function CaseView() {
           <Button variant="secondary" onClick={handleReport}>
             Generate PDF
           </Button>
-          <Button onClick={save} disabled={saving || !dirty}>
-            {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-          </Button>
         </div>
       </div>
-      {saveError ? <p className="text-sm text-red-400">{saveError}</p> : null}
 
       {/* Case details */}
       <Card>
@@ -482,6 +493,39 @@ export default function CaseView() {
 
 function roomOf(kase: Case) {
   return kase.room ?? { width: 4000, length: 3000, height: 2600 };
+}
+
+/** Compact autosave status: saving / saved / unsaved, plus retry on error. */
+function SaveStatus({
+  saving,
+  dirty,
+  error,
+  onRetry,
+}: {
+  saving: boolean;
+  dirty: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (error) {
+    return (
+      <button
+        onClick={onRetry}
+        className="text-xs text-red-400 hover:text-red-300"
+        title={error}
+      >
+        ⚠ Save failed — retry
+      </button>
+    );
+  }
+  const label = saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'All changes saved';
+  const dot = saving ? 'bg-amber-400' : dirty ? 'bg-slate-500' : 'bg-emerald-500';
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-slate-400" aria-live="polite">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      {label}
+    </span>
+  );
 }
 
 

@@ -1,5 +1,11 @@
 [
   {
+    "hash": "c8a4cb7",
+    "date": "2026-07-23T02:20:44+00:00",
+    "version": "0.21",
+    "subject": "Reconstruct area of convergence and origin per pattern group"
+  },
+  {
     "hash": "fee1e52",
     "date": "2026-07-23T02:13:30+00:00",
     "version": "0.20",
