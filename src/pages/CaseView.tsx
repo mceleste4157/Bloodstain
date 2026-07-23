@@ -18,6 +18,8 @@ import type Konva from 'konva';
 import type { Bloodstain, Case, LengthUnit, Room, StainCalculations, SurfaceType } from '@/types';
 import { analyzeScene, axisDiscrepancy, formatInUnit } from '@/lib/calculations';
 import { PATTERN_GROUPS } from '@/lib/bpa/patterns';
+import { presetOf, SCENE_PRESETS } from '@/lib/bpa/sceneObjects';
+import { fitTransform, unproject } from '@/lib/sketch/viewport';
 import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
 import { canRedo, canUndo, initHistory, pushHistory, redo, undo, type History } from '@/lib/history';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
@@ -34,6 +36,11 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Heavy (three.js) — only downloaded when the user opens the 3D scene.
 const Scene3D = lazy(() => import('@/components/sketch/Scene3D'));
+
+// Top-view canvas size (must match the <TopView> props for drop-coordinate math).
+const TOPVIEW_W = 820;
+const TOPVIEW_H = 600;
+const DND_MIME = 'application/x-bpa-object';
 
 const SURFACES: SurfaceType[] = [
   'floor',
@@ -198,6 +205,45 @@ export default function CaseView() {
       };
     });
     setDirty(true);
+  }
+
+  /** Add a scene item of `kind` centered at a room point (mm). */
+  function addObjectAt(kind: string, roomX: number, roomY: number) {
+    const preset = presetOf(kind) ?? SCENE_PRESETS[SCENE_PRESETS.length - 1];
+    commit((d) => {
+      const room = d.room ?? { width: 4000, length: 3000, height: 2600 };
+      const clamp = (v: number, max: number) => Math.max(0, Math.min(max, v));
+      const obj = {
+        id: `obj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        kind: preset.kind,
+        label: preset.label,
+        width: preset.width,
+        depth: preset.depth,
+        position: {
+          x: clamp(roomX - preset.width / 2, Math.max(0, room.width - preset.width)),
+          y: clamp(roomY - preset.depth / 2, Math.max(0, room.length - preset.depth)),
+        },
+      };
+      return { ...d, room: { ...room, furniture: [...(room.furniture ?? []), obj] } };
+    });
+  }
+
+  /** Handle a scene-item chip dropped onto the top-view plan. */
+  function handlePlanDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const kind = e.dataTransfer.getData(DND_MIME) || e.dataTransfer.getData('text/plain');
+    const room = draft?.room;
+    if (!kind || !room) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Account for horizontal scroll of the (overflow-x-auto) plan container.
+    const px = e.clientX - rect.left + e.currentTarget.scrollLeft;
+    const py = e.clientY - rect.top + e.currentTarget.scrollTop;
+    const t = fitTransform(
+      { width: room.width, height: room.length },
+      { width: TOPVIEW_W, height: TOPVIEW_H },
+    );
+    const rp = unproject(t, { x: px, y: py });
+    addObjectAt(kind, rp.x, rp.y);
   }
 
   /** Reposition a scene item (furniture/body) from a drag on the plan. */
@@ -548,27 +594,56 @@ export default function CaseView() {
                 </label>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            {/* Drag-and-drop palette: drag a chip onto the plan to place it. */}
+            <div className="mb-2">
+              <div className="mb-1 text-[11px] text-slate-500">
+                Drag an item onto the plan to place it — then drag it around to position it near the
+                stains (placement is a reference, not to scale):
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SCENE_PRESETS.map((preset) => (
+                  <div
+                    key={preset.kind}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(DND_MIME, preset.kind);
+                      e.dataTransfer.setData('text/plain', preset.kind);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="cursor-grab select-none rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-200 hover:border-brand-500/60 active:cursor-grabbing"
+                    title={`Drag "${preset.label}" onto the plan`}
+                  >
+                    {preset.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div
+              className="inline-block overflow-x-auto"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={handlePlanDrop}
+            >
               <TopView
                 stageRef={topViewRef}
                 room={draft.room}
                 stains={draft.stains}
                 analysis={analysis}
                 unit={roomUnit}
-                width={820}
-                height={600}
+                width={TOPVIEW_W}
+                height={TOPVIEW_H}
                 editable={editSketch}
-                snapMm={snap ? 25 : 0}
+                snapMm={snap && editSketch ? 25 : 0}
                 onStainMove={moveStain}
                 onFurnitureMove={moveFurniture}
               />
             </div>
-            {editSketch ? (
-              <p className="mt-2 text-xs text-slate-500">
-                Drag a stain or scene item (bed, body, chair…) to reposition it relative to the
-                bloodstains; changes update live and autosave.
-              </p>
-            ) : null}
+            <p className="mt-2 text-xs text-slate-500">
+              Scene items are draggable anytime. Turn on <span className="text-slate-300">Edit</span>{' '}
+              to also drag the bloodstains. All changes autosave.
+            </p>
           </Card>
 
           <Card>

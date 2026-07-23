@@ -68,17 +68,12 @@ export function TopView({
 
   return (
     <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
-      <Layer listening={editable}>
+      {/* Always listening so scene items can be dragged without an edit mode. */}
+      <Layer listening={true}>
         {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
-        <FurnitureItems
-          room={room}
-          t={t}
-          editable={editable}
-          snapMm={snapMm}
-          onFurnitureMove={onFurnitureMove}
-        />
+        <FurnitureItems room={room} t={t} snapMm={snapMm} onFurnitureMove={onFurnitureMove} />
         <DirectionalityLines analysis={analysis} t={t} />
         <Stains
           stains={stains}
@@ -185,13 +180,11 @@ function Fixtures({ room, t }: { room: Room; t: ViewTransform }) {
 function FurnitureItems({
   room,
   t,
-  editable,
   snapMm,
   onFurnitureMove,
 }: {
   room: Room;
   t: ViewTransform;
-  editable: boolean;
   snapMm: number;
   onFurnitureMove?: (id: string, x: number, y: number) => void;
 }) {
@@ -208,15 +201,17 @@ function FurnitureItems({
           });
           onFurnitureMove?.(f.id, rp.x, rp.y);
         };
-        // Group positioned at the item's front-left corner; children relative.
+        // Scene items are freely draggable (they are layout references, not
+        // forensic measurements) — no edit mode required.
+        const canDrag = !!onFurnitureMove;
         return (
           <Group
             key={f.id}
             x={p.x}
             y={p.y}
             rotation={f.rotation ?? 0}
-            draggable={editable}
-            onDragEnd={editable ? handleDragEnd : undefined}
+            draggable={canDrag}
+            onDragEnd={canDrag ? handleDragEnd : undefined}
           >
             <Rect
               x={0}

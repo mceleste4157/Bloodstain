@@ -139,8 +139,21 @@ export function RoomFeaturesPanel({ room, unit, onChange }: Props) {
                   </div>
                 </LabeledInput>
                 <button
+                  onClick={() =>
+                    setFurniture(
+                      furniture.map((x) =>
+                        x.id === f.id ? { ...x, rotation: ((x.rotation ?? 0) + 90) % 360 } : x,
+                      ),
+                    )
+                  }
+                  className="ml-auto text-xs text-slate-300 hover:text-brand-300"
+                  title="Rotate 90°"
+                >
+                  Rotate 90°
+                </button>
+                <button
                   onClick={() => setFurniture(furniture.filter((x) => x.id !== f.id))}
-                  className="ml-auto text-xs text-red-400 hover:text-red-300"
+                  className="text-xs text-red-400 hover:text-red-300"
                 >
                   Remove
                 </button>
