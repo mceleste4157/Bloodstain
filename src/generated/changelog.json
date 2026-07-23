@@ -1,5 +1,11 @@
 [
   {
+    "hash": "c3473fa",
+    "date": "2026-07-23T19:28:01+00:00",
+    "version": "0.30",
+    "subject": "Drag-and-drop scene placement; items draggable anytime"
+  },
+  {
     "hash": "9bf90b9",
     "date": "2026-07-23T19:17:47+00:00",
     "version": "0.29",

@@ -18,6 +18,7 @@ import type { SceneAnalysis } from '@/lib/calculations';
 import { formatInUnit } from '@/lib/calculations';
 import { groupColor, sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import { sceneObjectColor } from '@/lib/bpa/sceneObjects';
+import { FurnitureGlyph } from './FurnitureGlyph';
 import {
   fitTransform,
   niceScaleBarMm,
@@ -213,20 +214,14 @@ function FurnitureItems({
             draggable={canDrag}
             onDragEnd={canDrag ? handleDragEnd : undefined}
           >
-            <Rect
-              x={0}
-              y={0}
-              width={scaleLength(t, f.width)}
-              height={scaleLength(t, f.depth)}
-              stroke={color}
-              fill={color}
-              opacity={0.18}
-              strokeWidth={1.5}
-              dash={f.kind === 'body' ? undefined : [4, 3]}
+            <FurnitureGlyph
+              kind={f.kind}
+              w={scaleLength(t, f.width)}
+              d={scaleLength(t, f.depth)}
             />
             <Text
-              x={4}
-              y={4}
+              x={2}
+              y={-13}
               text={f.label}
               fontSize={11}
               fontStyle={f.kind === 'body' ? 'bold' : 'normal'}
