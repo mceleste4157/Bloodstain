@@ -37,6 +37,14 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // Immutable audit trail. Users can append their own entries and read their
+    // own; entries can never be updated or deleted.
+    match /auditLog/{entryId} {
+      allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid;
+      allow read:   if isSignedIn() && resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // Deny everything not matched above.
     match /{document=**} {
       allow read, write: if false;

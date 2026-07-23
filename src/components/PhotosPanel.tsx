@@ -10,6 +10,7 @@
 import { useRef, useState } from 'react';
 import type { Bloodstain, CasePhoto } from '@/types';
 import { deletePhotoObject, uploadPhoto } from '@/lib/firebase/photos';
+import { logAudit } from '@/lib/firebase/audit';
 import { Button } from '@/components/ui';
 
 interface PhotosPanelProps {
@@ -35,6 +36,7 @@ export function PhotosPanel({ photos, stains, ownerUid, caseId, onChange }: Phot
         uploaded.push(await uploadPhoto(file, ownerUid, caseId));
       }
       onChange([...photos, ...uploaded]);
+      if (uploaded.length) void logAudit('photo.added', caseId, { count: uploaded.length });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
@@ -51,6 +53,7 @@ export function PhotosPanel({ photos, stains, ownerUid, caseId, onChange }: Phot
     if (!confirm('Delete this photo? This cannot be undone.')) return;
     await deletePhotoObject(photo.storagePath);
     onChange(photos.filter((p) => p.id !== photo.id));
+    void logAudit('photo.deleted', caseId);
   }
 
   function toggleLink(photo: CasePhoto, stainId: string) {

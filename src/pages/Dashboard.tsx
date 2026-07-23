@@ -15,6 +15,7 @@ import type { Case } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCases } from '@/hooks/useCases';
 import { createCase, makeEmptyCase } from '@/lib/firebase/cases';
+import { logAudit } from '@/lib/firebase/audit';
 import { Button, Card, Spinner, TextInput } from '@/components/ui';
 
 export default function Dashboard() {
@@ -44,6 +45,7 @@ export default function Dashboard() {
     setCreateError(null);
     try {
       const id = await createCase(makeEmptyCase(user.uid, number));
+      void logAudit('case.created', id, { caseNumber: number });
       setNewCaseNumber('');
       navigate(`/cases/${id}`);
     } catch (err) {

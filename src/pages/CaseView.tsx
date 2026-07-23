@@ -20,7 +20,9 @@ import { analyzeScene, axisDiscrepancy, formatInUnit } from '@/lib/calculations'
 import { PATTERN_GROUPS } from '@/lib/bpa/patterns';
 import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
+import { logAudit } from '@/lib/firebase/audit';
 import { useCase } from '@/hooks/useCases';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import { LengthInput } from '@/components/LengthInput';
 import { PhotosPanel } from '@/components/PhotosPanel';
 import { TopView } from '@/components/sketch/TopView';
@@ -46,6 +48,7 @@ export default function CaseView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { kase, loading, error } = useCase(id);
+  const { entries: auditEntries } = useAuditLog(id);
 
   // Editable working copy, seeded from the loaded case.
   const [draft, setDraft] = useState<Case | null>(null);
@@ -185,6 +188,7 @@ export default function CaseView() {
     if (!id) return;
     if (!confirm(`Delete case ${draft!.caseNumber}? This cannot be undone.`)) return;
     try {
+      void logAudit('case.deleted', id, { caseNumber: draft!.caseNumber });
       await deleteCase(id);
       navigate('/');
     } catch (err) {
@@ -226,6 +230,7 @@ export default function CaseView() {
       elevationLabel: `Wall elevation — ${wall} wall`,
       photos,
     });
+    if (id) void logAudit('report.generated', id, { photos: photos.length });
   }
 
   return (
@@ -565,12 +570,49 @@ export default function CaseView() {
           </Card>
         </>
       ) : null}
+
+      {/* Activity log (chain of custody) */}
+      {auditEntries.length > 0 ? (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Activity log
+          </h2>
+          <ul className="space-y-1 text-sm">
+            {auditEntries.slice(0, 20).map((e) => (
+              <li key={e.id} className="flex justify-between gap-3 border-b border-surface-border/40 py-1">
+                <span className="text-slate-200">{auditActionLabel(e.action)}</span>
+                <span className="text-xs text-slate-500">
+                  {new Date(e.timestamp).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }
 
 function roomOf(kase: Case) {
   return kase.room ?? { width: 4000, length: 3000, height: 2600 };
+}
+
+/** Human label for an audit action code. */
+function auditActionLabel(action: string): string {
+  switch (action) {
+    case 'case.created':
+      return 'Case created';
+    case 'case.deleted':
+      return 'Case deleted';
+    case 'report.generated':
+      return 'PDF report generated';
+    case 'photo.added':
+      return 'Evidence photo added';
+    case 'photo.deleted':
+      return 'Evidence photo deleted';
+    default:
+      return action;
+  }
 }
 
 /** Compact autosave status: saving / saved / unsaved, plus retry on error. */

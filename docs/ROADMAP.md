@@ -83,12 +83,14 @@ on top of the typed data model and pure calculation/sketch core.
   stages), calculation-methodology appendix, and a signature page. Lazy-loaded.
 - ⬜ Still to add: evidence photos and the 3D image (pending those modules).
 
-## 🟡 Section 9 — Security hardening & PWA (PWA done)
+## 🟡 Section 9 — Security hardening & PWA (PWA + audit log done)
 
 - ✅ PWA: manifest, service worker (autoUpdate), offline shell, home-screen
   install, app icons.
-- ⬜ Role-based permissions (`UserRole`), audit log (`AuditLogEntry`) writes on
-  mutations, tighter Firestore rules, backups, encrypted-storage review.
+- ✅ Immutable audit log (`auditLog` collection + rules): records case
+  created/deleted, report generated, and photo added/deleted; per-case Activity
+  log shown in the case view.
+- ⬜ Role-based permissions (`UserRole`), backups, encrypted-storage review.
 
 ## ✅ BPA domain features (added beyond the original plan)
 
