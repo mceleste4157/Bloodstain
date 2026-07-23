@@ -14,6 +14,7 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import CaseView from '@/pages/CaseView';
 import { Spinner } from '@/components/ui';
+import { APP_VERSION } from '@/version';
 
 export default function App() {
   return (
@@ -21,7 +22,17 @@ export default function App() {
       <BrowserRouter>
         <AuthGate />
       </BrowserRouter>
+      <VersionBadge />
     </AuthProvider>
+  );
+}
+
+/** Small fixed version label, visible on every screen to confirm deploys. */
+function VersionBadge() {
+  return (
+    <div className="pointer-events-none fixed bottom-2 right-3 z-50 select-none text-[11px] text-slate-500">
+      v{APP_VERSION}
+    </div>
   );
 }
 
