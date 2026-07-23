@@ -31,6 +31,8 @@ export interface WallElevationProps {
   height?: number;
   /** Ref to the underlying Konva stage, e.g. for PDF raster export. */
   stageRef?: React.Ref<Konva.Stage>;
+  /** Called when a wall stain is dragged: new along-wall distance + height (mm). */
+  onWallStainMove?: (stainId: string, alongWall: number, z: number) => void;
 }
 
 /** Width of the wall being viewed (its horizontal extent). */
@@ -54,6 +56,7 @@ export function WallElevation({
   width = 800,
   height = 480,
   stageRef,
+  onWallStainMove,
 }: WallElevationProps) {
   const extent = wallExtent(room, wall);
   const t = fitTransform({ width: extent, height: room.height }, { width, height });
@@ -62,12 +65,16 @@ export function WallElevation({
   const px = (alongWall: number) => alongWall * t.scale + t.offsetX;
   // Height (z, floor at 0) → canvas y, flipped so the floor sits at the bottom.
   const py = (z: number) => t.offsetY + (room.height - z) * t.scale;
+  // Inverse mappings, for converting a dragged marker back to along-wall + height.
+  const toAlongWall = (canvasX: number) => (canvasX - t.offsetX) / t.scale;
+  const toHeight = (canvasY: number) => room.height - (canvasY - t.offsetY) / t.scale;
 
   const wallStains = stains.filter((s) => s.surface === WALL_SURFACE[wall]);
+  const canDrag = !!onWallStainMove;
 
   return (
     <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
-      <Layer listening={false}>
+      <Layer listening={canDrag}>
         {/* Wall rectangle */}
         <Rect
           x={px(0)}
@@ -113,7 +120,7 @@ export function WallElevation({
           );
         })}
 
-        {/* Stains on this wall */}
+        {/* Stains on this wall (draggable to reposition on the wall) */}
         {wallStains.map((stain) => {
           const pos = analysis.stainResults[stain.id]?.position;
           if (!pos) return null;
@@ -121,26 +128,41 @@ export function WallElevation({
           const z = pos.z;
           const cx = px(alongWall);
           const cy = py(z);
+          const leaderLen = py(0) - cy; // distance down to the floor (relative)
+
+          const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+            const node = e.target;
+            const a = Math.max(0, Math.min(extent, toAlongWall(node.x())));
+            const zz = Math.max(0, Math.min(room.height, toHeight(node.y())));
+            onWallStainMove?.(stain.id, a, zz);
+          };
+
+          // Group positioned at the marker; children drawn relative so the whole
+          // marker + leader + label drag together.
           return (
-            <Group key={`el-${stain.id}`}>
+            <Group
+              key={`el-${stain.id}`}
+              x={cx}
+              y={cy}
+              draggable={canDrag}
+              onDragEnd={canDrag ? handleDragEnd : undefined}
+            >
               {/* Height leader line down to the floor */}
-              <Line points={[cx, cy, cx, py(0)]} stroke={sketchTheme.measurement} strokeWidth={1} dash={[3, 3]} />
+              <Line points={[0, 0, 0, leaderLen]} stroke={sketchTheme.measurement} strokeWidth={1} dash={[3, 3]} />
               {/* Stain marker */}
               <Rect
-                x={cx - 5}
-                y={cy - 5}
+                x={-5}
+                y={-5}
                 width={10}
                 height={10}
                 rotation={45}
-                offsetX={0}
-                offsetY={0}
                 fill={sketchTheme.stain}
                 stroke={sketchTheme.stainStroke}
                 strokeWidth={1}
               />
               <Text
-                x={cx + 8}
-                y={cy - 6}
+                x={8}
+                y={-6}
                 text={`${stain.stainId}  ${formatInUnit(z, unit)}`}
                 fontSize={11}
                 fontStyle="bold"

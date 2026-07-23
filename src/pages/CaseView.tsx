@@ -72,7 +72,6 @@ export default function CaseView() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [wall, setWall] = useState<WallId>('north');
-  const [editSketch, setEditSketch] = useState(false);
   const [snap, setSnap] = useState(true);
   const [show3D, setShow3D] = useState(false);
 
@@ -352,6 +351,20 @@ export default function CaseView() {
         },
       };
     });
+  }
+
+  /** Reposition a wall stain by dragging it on the elevation. */
+  function moveWallStain(stainId: string, alongWall: number, z: number) {
+    commit((d) => ({
+      ...d,
+      stains: d.stains.map((s) => {
+        if (s.id !== stainId) return s;
+        const next: Bloodstain = { ...s, heightAboveFloor: Math.round(z) };
+        if (wall === 'north' || wall === 'south') next.distanceFromLeftWall = Math.round(alongWall);
+        else next.distanceFromFrontWall = Math.round(alongWall);
+        return next;
+      }),
+    }));
   }
 
   /** Reposition a scene item (furniture/body) from a drag on the plan. */
@@ -684,20 +697,7 @@ export default function CaseView() {
               </h2>
               <div className="flex items-center gap-4 text-xs text-slate-300">
                 <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={editSketch}
-                    onChange={(e) => setEditSketch(e.target.checked)}
-                  />
-                  Edit (drag stains)
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={snap}
-                    disabled={!editSketch}
-                    onChange={(e) => setSnap(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
                   Snap to grid
                 </label>
               </div>
@@ -754,17 +754,15 @@ export default function CaseView() {
                 unit={roomUnit}
                 width={TOPVIEW_W}
                 height={TOPVIEW_H}
-                editable={editSketch}
-                snapMm={snap && editSketch ? 25 : 0}
+                snapMm={snap ? 25 : 0}
                 onStainMove={moveStain}
                 onFurnitureMove={moveFurniture}
                 onFurnitureTransform={transformFurniture}
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Drag items to place them; click an item to resize or rotate it with the handles. Turn
-              on <span className="text-slate-300">Edit</span>{' '}
-              to also drag the bloodstains. All changes autosave.
+              Drag bloodstains and scene items to position them; click an item to resize or rotate
+              it with the handles. All changes autosave.
             </p>
           </Card>
 
@@ -816,6 +814,7 @@ export default function CaseView() {
                 wall={wall}
                 width={WALLVIEW_W}
                 height={WALLVIEW_H}
+                onWallStainMove={moveWallStain}
               />
             </div>
           </Card>

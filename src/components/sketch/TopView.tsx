@@ -19,6 +19,7 @@ import type { SceneAnalysis } from '@/lib/calculations';
 import { formatInUnit } from '@/lib/calculations';
 import { groupColor, sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import { sceneObjectColor } from '@/lib/bpa/sceneObjects';
+import { patternLabel } from '@/lib/bpa/patterns';
 import { FurnitureGlyph } from './FurnitureGlyph';
 import {
   fitTransform,
@@ -41,8 +42,6 @@ export interface TopViewProps {
   gridMm?: number;
   /** Ref to the underlying Konva stage, e.g. for PDF raster export. */
   stageRef?: React.Ref<Konva.Stage>;
-  /** When true, stains can be dragged to reposition them. */
-  editable?: boolean;
   /** Snap dragged stains to this room-grid step (mm); 0 disables snapping. */
   snapMm?: number;
   /** Called with the new (x, y) room-mm position when a stain is dragged. */
@@ -73,7 +72,6 @@ export function TopView({
   height = 600,
   gridMm = 500,
   stageRef,
-  editable = false,
   snapMm = 0,
   onStainMove,
   onFurnitureMove,
@@ -116,7 +114,6 @@ export function TopView({
           analysis={analysis}
           t={t}
           room={room}
-          editable={editable}
           snapMm={snapMm}
           onStainMove={onStainMove}
         />
@@ -372,7 +369,6 @@ function Stains({
   analysis,
   t,
   room,
-  editable,
   snapMm,
   onStainMove,
 }: {
@@ -380,10 +376,10 @@ function Stains({
   analysis: SceneAnalysis;
   t: ViewTransform;
   room: Room;
-  editable: boolean;
   snapMm: number;
   onStainMove?: (stainId: string, x: number, y: number) => void;
 }) {
+  const canDrag = !!onStainMove;
   return (
     <Group>
       {stains.map((stain) => {
@@ -396,6 +392,7 @@ function Stains({
         const ratio = analysis.stainResults[stain.id]?.widthToLengthRatio;
         const rX = 9;
         const rY = Number.isFinite(ratio) ? Math.max(2.5, 9 * (ratio as number)) : 6;
+        const typeLabel = stain.patternType ? patternLabel(stain.patternType) : null;
 
         const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
           // The dragged Group's new canvas position → room mm, snapped/clamped.
@@ -415,8 +412,8 @@ function Stains({
             key={`stain-${stain.id}`}
             x={p.x}
             y={p.y}
-            draggable={editable}
-            onDragEnd={editable ? handleDragEnd : undefined}
+            draggable={canDrag}
+            onDragEnd={canDrag ? handleDragEnd : undefined}
           >
             <Ellipse
               x={0}
@@ -431,7 +428,7 @@ function Stains({
             <Text
               x={11}
               y={-6}
-              text={stain.stainId}
+              text={typeLabel ? `${stain.stainId} · ${typeLabel}` : stain.stainId}
               fontSize={11}
               fontStyle="bold"
               fontFamily={sketchFont}
