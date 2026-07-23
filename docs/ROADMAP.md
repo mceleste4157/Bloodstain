@@ -19,13 +19,25 @@ on top of the typed data model and pure calculation/sketch core.
   reference).
 - Demo shell (`App.tsx`) wiring it together on a sample case.
 
-## Section 2 — Firebase & app frame
+## ✅ Section 2 — Firebase & app frame (done)
 
-- `firebase-config.ts` (Auth, Firestore, Storage) as a typed service layer.
-- Email/password auth with an auth-gated route shell; sign-in / sign-up.
-- Case CRUD against Firestore using the existing per-owner rules; repository
-  hooks (`useCase`, `useCases`) returning typed `Case` objects.
-- App router: dashboard, case view, sketch view, report view.
+- Typed Firebase service layer: `lib/firebase/config.ts` (Auth, Firestore,
+  Storage), `auth.ts` (email/password + friendly error mapping), `cases.ts`
+  (typed `cases` repository with live `onSnapshot` subscriptions).
+- `AuthContext` + auth-gated router: login/sign-up screen, protected app shell,
+  sign-out. No data without a signed-in user (CJIS-friendly).
+- Case CRUD against Firestore with a per-owner security rule for `cases`;
+  hooks `useCases` / `useCase` returning typed `Case` objects.
+- App router: **Dashboard** (stats, create, client-side search, live case list)
+  and **CaseView** (edit case info + room + stains, live analysis + sketches,
+  save/delete). Reuses the Section-1 calculation and sketch modules unchanged.
+
+> **One-time setup:** the `cases` security rule must be deployed before the app
+> can read/write cases. CI deploys Hosting only (service-account permissions),
+> so run once from an owner login:
+> `npx firebase-tools deploy --only firestore:rules`.
+> Also ensure Email/Password sign-in is enabled (Authentication → Sign-in
+> method) — it already is for the legacy demo.
 
 ## Section 3 — Dashboard & case management
 

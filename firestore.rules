@@ -24,6 +24,19 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // Investigation cases. Each case document stores the creating user's UID in
+    // `ownerUid`; access is restricted to that owner (no cross-user or
+    // anonymous access). `create` requires the new doc to be owned by the
+    // caller; ownership cannot be changed on update.
+    match /cases/{caseId} {
+      allow read:   if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     // Deny everything not matched above.
     match /{document=**} {
       allow read, write: if false;
