@@ -17,6 +17,7 @@ import type { Case } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatLength } from '@/lib/calculations';
 import { categoryCounts, patternLabel } from '@/lib/bpa/patterns';
+import { buildMethodology } from '@/lib/bpa/methodology';
 
 export interface ReportSketchImages {
   /** PNG data URL of the top-view sketch. */
@@ -200,6 +201,9 @@ export function generateReportDoc(
     addImageSection(doc, images.elevationLabel || 'Wall elevation', images.elevation, y, contentWidth);
   }
 
+  // ---- Calculation methodology appendix ----
+  addMethodology(doc, kase, analysis);
+
   // ---- Signature page ----
   addSignaturePage(doc, kase);
 
@@ -247,6 +251,42 @@ function addImageSection(
   const h = w * ratio;
   doc.addImage(dataUrl, 'PNG', MARGIN, y, w, h);
   return y + h;
+}
+
+function addMethodology(doc: jsPDF, kase: Case, analysis: SceneAnalysis): void {
+  const sections = buildMethodology(kase, analysis);
+  doc.addPage();
+  let y = MARGIN;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Appendix — Calculation methodology', MARGIN, y);
+  y += LINE + 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  doc.text('Formula, inputs, and result for every derived value. Lengths in mm.', MARGIN, y);
+  doc.setTextColor(0);
+  y += 6;
+
+  for (const section of sections) {
+    const body = section.lines.map((line) => [
+      line.label,
+      [line.formula, line.substitution ? `= ${line.substitution}` : null, line.result ? `= ${line.result}` : null, line.note]
+        .filter(Boolean)
+        .join('\n'),
+    ]);
+    autoTable(doc, {
+      startY: y + 10,
+      theme: 'grid',
+      headStyles: { fillColor: [51, 65, 85] },
+      styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
+      head: [[section.title, '']],
+      body: body.length ? body : [['—', '—']],
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 150 } },
+      margin: { left: MARGIN, right: MARGIN },
+    });
+    y = afterTableY(doc);
+  }
 }
 
 function addSignaturePage(doc: jsPDF, kase: Case): void {

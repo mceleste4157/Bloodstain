@@ -165,6 +165,9 @@ export default function CaseView() {
           <Button variant="danger" onClick={handleDelete}>
             Delete
           </Button>
+          <Button variant="ghost" onClick={() => navigate(`/cases/${id}/calculations`)}>
+            Show calculations
+          </Button>
           <Button variant="secondary" onClick={handleReport}>
             Generate PDF
           </Button>

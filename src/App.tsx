@@ -13,6 +13,7 @@ import AppLayout from '@/components/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import CaseView from '@/pages/CaseView';
+import CalculationsView from '@/pages/CalculationsView';
 import { Spinner } from '@/components/ui';
 import { APP_VERSION } from '@/version';
 
@@ -56,6 +57,7 @@ function AuthGate() {
       <Route element={<AppLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="cases/:id" element={<CaseView />} />
+        <Route path="cases/:id/calculations" element={<CalculationsView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
