@@ -11,7 +11,8 @@
  *   stains + labels → convergence & area-of-origin markers → scale bar + north.
  */
 
-import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { useEffect, useRef, useState } from 'react';
+import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
@@ -48,6 +49,19 @@ export interface TopViewProps {
   onStainMove?: (stainId: string, x: number, y: number) => void;
   /** Called with the new (x, y) room-mm position when a scene item is dragged. */
   onFurnitureMove?: (id: string, x: number, y: number) => void;
+  /** Called when a scene item is resized/rotated on the plan. */
+  onFurnitureTransform?: (
+    id: string,
+    next: { x: number; y: number; width: number; depth: number; rotation: number },
+  ) => void;
+}
+
+export interface FurnitureTransform {
+  x: number;
+  y: number;
+  width: number;
+  depth: number;
+  rotation: number;
 }
 
 export function TopView({
@@ -63,18 +77,39 @@ export function TopView({
   snapMm = 0,
   onStainMove,
   onFurnitureMove,
+  onFurnitureTransform,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
-    <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
+    <Stage
+      ref={stageRef}
+      width={width}
+      height={height}
+      style={{ background: sketchTheme.background }}
+      onMouseDown={(e) => {
+        if (e.target === e.target.getStage()) setSelectedId(null);
+      }}
+      onTouchStart={(e) => {
+        if (e.target === e.target.getStage()) setSelectedId(null);
+      }}
+    >
       {/* Always listening so scene items can be dragged without an edit mode. */}
       <Layer listening={true}>
         {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
-        <FurnitureItems room={room} t={t} snapMm={snapMm} onFurnitureMove={onFurnitureMove} />
+        <FurnitureItems
+          room={room}
+          t={t}
+          snapMm={snapMm}
+          onFurnitureMove={onFurnitureMove}
+          onFurnitureTransform={onFurnitureTransform}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
         <DirectionalityLines analysis={analysis} t={t} />
         <Stains
           stains={stains}
@@ -183,17 +218,39 @@ function FurnitureItems({
   t,
   snapMm,
   onFurnitureMove,
+  onFurnitureTransform,
+  selectedId,
+  onSelect,
 }: {
   room: Room;
   t: ViewTransform;
   snapMm: number;
   onFurnitureMove?: (id: string, x: number, y: number) => void;
+  onFurnitureTransform?: (id: string, next: FurnitureTransform) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
 }) {
+  const nodeRefs = useRef<Map<string, Konva.Group>>(new Map());
+  const trRef = useRef<Konva.Transformer>(null);
+
+  // Attach the transformer to the currently-selected item's node.
+  useEffect(() => {
+    const tr = trRef.current;
+    if (!tr) return;
+    const node = selectedId ? nodeRefs.current.get(selectedId) : null;
+    tr.nodes(node ? [node] : []);
+    tr.getLayer()?.batchDraw();
+  }, [selectedId, room.furniture]);
+
+  const canDrag = !!onFurnitureMove;
+  const canTransform = !!onFurnitureTransform;
+
   return (
     <Group>
       {(room.furniture ?? []).map((f) => {
         const p = project(t, f.position);
         const color = sceneObjectColor(f.kind);
+
         const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
           const node = e.target;
           const rp = snapPoint(unproject(t, { x: node.x(), y: node.y() }), snapMm, {
@@ -202,17 +259,40 @@ function FurnitureItems({
           });
           onFurnitureMove?.(f.id, rp.x, rp.y);
         };
-        // Scene items are freely draggable (they are layout references, not
-        // forensic measurements) — no edit mode required.
-        const canDrag = !!onFurnitureMove;
+
+        const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
+          const node = e.target as Konva.Group;
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+          const rotation = node.rotation();
+          // Bake the scale into width/depth and reset it, so re-renders stay stable.
+          node.scaleX(1);
+          node.scaleY(1);
+          const rp = unproject(t, { x: node.x(), y: node.y() });
+          onFurnitureTransform?.(f.id, {
+            x: rp.x,
+            y: rp.y,
+            width: Math.max(50, f.width * scaleX),
+            depth: Math.max(50, f.depth * scaleY),
+            rotation,
+          });
+        };
+
         return (
           <Group
             key={f.id}
+            ref={(node) => {
+              if (node) nodeRefs.current.set(f.id, node);
+              else nodeRefs.current.delete(f.id);
+            }}
             x={p.x}
             y={p.y}
             rotation={f.rotation ?? 0}
             draggable={canDrag}
             onDragEnd={canDrag ? handleDragEnd : undefined}
+            onTransformEnd={canTransform ? handleTransformEnd : undefined}
+            onMouseDown={canTransform ? () => onSelect(f.id) : undefined}
+            onTap={canTransform ? () => onSelect(f.id) : undefined}
           >
             <FurnitureGlyph
               kind={f.kind}
@@ -231,6 +311,20 @@ function FurnitureItems({
           </Group>
         );
       })}
+      {canTransform ? (
+        <Transformer
+          ref={trRef}
+          rotateEnabled
+          keepRatio={false}
+          ignoreStroke
+          anchorSize={8}
+          borderStroke={sketchTheme.measurement}
+          anchorStroke={sketchTheme.measurement}
+          boundBoxFunc={(oldBox, newBox) =>
+            newBox.width < 8 || newBox.height < 8 ? oldBox : newBox
+          }
+        />
+      ) : null}
     </Group>
   );
 }

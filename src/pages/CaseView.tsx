@@ -327,6 +327,33 @@ export default function CaseView() {
     addWallStainAt(wall, clampRange(alongWall, extent), clampRange(z, room.height));
   }
 
+  /** Resize/rotate a scene item from the plan transformer. */
+  function transformFurniture(
+    objId: string,
+    next: { x: number; y: number; width: number; depth: number; rotation: number },
+  ) {
+    commit((d) => {
+      if (!d.room?.furniture) return d;
+      return {
+        ...d,
+        room: {
+          ...d.room,
+          furniture: d.room.furniture.map((f) =>
+            f.id === objId
+              ? {
+                  ...f,
+                  position: { x: Math.round(next.x), y: Math.round(next.y) },
+                  width: Math.round(next.width),
+                  depth: Math.round(next.depth),
+                  rotation: Math.round(next.rotation),
+                }
+              : f,
+          ),
+        },
+      };
+    });
+  }
+
   /** Reposition a scene item (furniture/body) from a drag on the plan. */
   function moveFurniture(objId: string, x: number, y: number) {
     commit((d) => {
@@ -731,10 +758,12 @@ export default function CaseView() {
                 snapMm={snap && editSketch ? 25 : 0}
                 onStainMove={moveStain}
                 onFurnitureMove={moveFurniture}
+                onFurnitureTransform={transformFurniture}
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Scene items are draggable anytime. Turn on <span className="text-slate-300">Edit</span>{' '}
+              Drag items to place them; click an item to resize or rotate it with the handles. Turn
+              on <span className="text-slate-300">Edit</span>{' '}
               to also drag the bloodstains. All changes autosave.
             </p>
           </Card>
