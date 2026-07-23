@@ -60,6 +60,23 @@ export function project(t: ViewTransform, p: Point2D): Point2D {
   return { x: p.x * t.scale + t.offsetX, y: p.y * t.scale + t.offsetY };
 }
 
+/** Inverse of {@link project}: map a canvas point (px) back to room mm. */
+export function unproject(t: ViewTransform, p: Point2D): Point2D {
+  return { x: (p.x - t.offsetX) / t.scale, y: (p.y - t.offsetY) / t.scale };
+}
+
+/** Snap a room point to the nearest multiple of `stepMm`, clamped to bounds. */
+export function snapPoint(p: Point2D, stepMm: number, bounds?: Size): Point2D {
+  const snap = (v: number) => (stepMm > 0 ? Math.round(v / stepMm) * stepMm : v);
+  let x = snap(p.x);
+  let y = snap(p.y);
+  if (bounds) {
+    x = Math.max(0, Math.min(bounds.width, x));
+    y = Math.max(0, Math.min(bounds.height, y));
+  }
+  return { x, y };
+}
+
 /** Scale a length in mm to px (no translation). */
 export function scaleLength(t: ViewTransform, lengthMm: number): number {
   return lengthMm * t.scale;

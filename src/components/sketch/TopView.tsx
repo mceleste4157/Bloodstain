@@ -22,6 +22,8 @@ import {
   niceScaleBarMm,
   project,
   scaleLength,
+  snapPoint,
+  unproject,
   type ViewTransform,
 } from '@/lib/sketch/viewport';
 
@@ -36,6 +38,12 @@ export interface TopViewProps {
   gridMm?: number;
   /** Ref to the underlying Konva stage, e.g. for PDF raster export. */
   stageRef?: React.Ref<Konva.Stage>;
+  /** When true, stains can be dragged to reposition them. */
+  editable?: boolean;
+  /** Snap dragged stains to this room-grid step (mm); 0 disables snapping. */
+  snapMm?: number;
+  /** Called with the new (x, y) room-mm position when a stain is dragged. */
+  onStainMove?: (stainId: string, x: number, y: number) => void;
 }
 
 export function TopView({
@@ -47,19 +55,30 @@ export function TopView({
   height = 600,
   gridMm = 500,
   stageRef,
+  editable = false,
+  snapMm = 0,
+  onStainMove,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
 
   return (
     <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
-      <Layer listening={false}>
+      <Layer listening={editable}>
         {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
         <FurnitureItems room={room} t={t} />
         <DirectionalityLines stains={stains} analysis={analysis} t={t} />
-        <Stains stains={stains} analysis={analysis} t={t} />
+        <Stains
+          stains={stains}
+          analysis={analysis}
+          t={t}
+          room={room}
+          editable={editable}
+          snapMm={snapMm}
+          onStainMove={onStainMove}
+        />
         <ConvergenceAndOrigin analysis={analysis} unit={unit} t={t} />
         <ScaleBar t={t} unit={unit} canvasHeight={height} />
         <NorthArrow canvasWidth={width} />
@@ -222,10 +241,18 @@ function Stains({
   stains,
   analysis,
   t,
+  room,
+  editable,
+  snapMm,
+  onStainMove,
 }: {
   stains: Bloodstain[];
   analysis: SceneAnalysis;
   t: ViewTransform;
+  room: Room;
+  editable: boolean;
+  snapMm: number;
+  onStainMove?: (stainId: string, x: number, y: number) => void;
 }) {
   return (
     <Group>
@@ -239,11 +266,31 @@ function Stains({
         const ratio = analysis.stainResults[stain.id]?.widthToLengthRatio;
         const rX = 9;
         const rY = Number.isFinite(ratio) ? Math.max(2.5, 9 * (ratio as number)) : 6;
+
+        const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+          // The dragged Group's new canvas position → room mm, snapped/clamped.
+          const node = e.target;
+          const roomPoint = snapPoint(
+            unproject(t, { x: node.x(), y: node.y() }),
+            snapMm,
+            { width: room.width, height: room.length },
+          );
+          onStainMove?.(stain.id, roomPoint.x, roomPoint.y);
+        };
+
+        // The Group is positioned at the stain; children are drawn relative to
+        // it so dragging the Group moves the whole glyph + label together.
         return (
-          <Group key={`stain-${stain.id}`}>
+          <Group
+            key={`stain-${stain.id}`}
+            x={p.x}
+            y={p.y}
+            draggable={editable}
+            onDragEnd={editable ? handleDragEnd : undefined}
+          >
             <Ellipse
-              x={p.x}
-              y={p.y}
+              x={0}
+              y={0}
               radiusX={rX}
               radiusY={rY}
               rotation={-(stain.directionality ?? 0)}
@@ -252,8 +299,8 @@ function Stains({
               strokeWidth={1}
             />
             <Text
-              x={p.x + 11}
-              y={p.y - 6}
+              x={11}
+              y={-6}
               text={stain.stainId}
               fontSize={11}
               fontStyle="bold"

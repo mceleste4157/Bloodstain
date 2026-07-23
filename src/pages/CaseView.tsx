@@ -48,6 +48,8 @@ export default function CaseView() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [wall, setWall] = useState<WallId>('north');
+  const [editSketch, setEditSketch] = useState(false);
+  const [snap, setSnap] = useState(true);
 
   // Konva stage refs, used to rasterize the sketches into the PDF report.
   const topViewRef = useRef<Konva.Stage>(null);
@@ -112,6 +114,32 @@ export default function CaseView() {
 
   function removeStain(stainId: string) {
     patch({ stains: draft!.stains.filter((s) => s.id !== stainId) });
+  }
+
+  /** Reposition a stain from a drag on the top-view plan (x, y in room mm). */
+  function moveStain(stainId: string, x: number, y: number) {
+    setDraft((d) => {
+      if (!d) return d;
+      const width = d.room?.width;
+      const length = d.room?.length;
+      return {
+        ...d,
+        stains: d.stains.map((s) => {
+          if (s.id !== stainId) return s;
+          const next: Bloodstain = { ...s, distanceFromLeftWall: x, distanceFromFrontWall: y };
+          // Keep any far-wall measurements consistent so no discrepancy warning
+          // appears just from dragging.
+          if (typeof s.distanceFromRightWall === 'number' && typeof width === 'number') {
+            next.distanceFromRightWall = width - x;
+          }
+          if (typeof s.distanceFromRearWall === 'number' && typeof length === 'number') {
+            next.distanceFromRearWall = length - y;
+          }
+          return next;
+        }),
+      };
+    });
+    setDirty(true);
   }
 
   async function save() {
@@ -340,9 +368,30 @@ export default function CaseView() {
       {draft.room && analysis ? (
         <>
           <Card>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-              Top view (floor plan)
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                Top view (floor plan)
+              </h2>
+              <div className="flex items-center gap-4 text-xs text-slate-300">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={editSketch}
+                    onChange={(e) => setEditSketch(e.target.checked)}
+                  />
+                  Edit (drag stains)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={snap}
+                    disabled={!editSketch}
+                    onChange={(e) => setSnap(e.target.checked)}
+                  />
+                  Snap to grid
+                </label>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <TopView
                 stageRef={topViewRef}
@@ -352,8 +401,16 @@ export default function CaseView() {
                 unit={roomUnit}
                 width={820}
                 height={600}
+                editable={editSketch}
+                snapMm={snap ? 25 : 0}
+                onStainMove={moveStain}
               />
             </div>
+            {editSketch ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Drag a stain to reposition it; its wall distances update live. Remember to Save.
+              </p>
+            ) : null}
           </Card>
 
           <Card>

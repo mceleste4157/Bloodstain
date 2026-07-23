@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitTransform, niceScaleBarMm, project, scaleLength } from './viewport';
+import { fitTransform, niceScaleBarMm, project, scaleLength, snapPoint, unproject } from './viewport';
 
 describe('fitTransform', () => {
   it('fits a room into the canvas preserving aspect ratio and centering', () => {
@@ -31,6 +31,30 @@ describe('fitTransform', () => {
     const t = fitTransform({ width: 0, height: 0 }, { width: 100, height: 100 });
     expect(Number.isFinite(t.scale)).toBe(true);
     expect(t.scale).toBeGreaterThan(0);
+  });
+});
+
+describe('unproject', () => {
+  it('is the inverse of project', () => {
+    const t = fitTransform({ width: 1000, height: 800 }, { width: 840, height: 440 }, 20);
+    for (const p of [{ x: 0, y: 0 }, { x: 500, y: 400 }, { x: 1000, y: 800 }]) {
+      const round = unproject(t, project(t, p));
+      expect(round.x).toBeCloseTo(p.x);
+      expect(round.y).toBeCloseTo(p.y);
+    }
+  });
+});
+
+describe('snapPoint', () => {
+  it('snaps to the nearest step', () => {
+    expect(snapPoint({ x: 237, y: 512 }, 100)).toEqual({ x: 200, y: 500 });
+  });
+
+  it('clamps to bounds when provided', () => {
+    expect(snapPoint({ x: -50, y: 9000 }, 100, { width: 1000, height: 1000 })).toEqual({
+      x: 0,
+      y: 1000,
+    });
   });
 });
 
