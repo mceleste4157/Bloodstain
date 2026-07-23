@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Per-user profile document, keyed by the auth UID.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Example collection. Every item stores the creating user's UID in
+    // `ownerUid`; a user can only see and modify their own items.
+    match /items/{itemId} {
+      allow read:   if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Deny everything not matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

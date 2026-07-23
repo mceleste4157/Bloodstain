@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bloodstain-c5531</title>
+  <style>
+    :root {
+      --bg: #0b1120; --card: #131c31; --border: #24314d; --text: #e5edff;
+      --muted: #93a4c6; --accent: #2563eb; --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text); padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #16233f 0%, var(--bg) 60%);
+    }
+    .wrap { width: min(640px, 100%); margin: 0 auto; }
+    header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px;
+    }
+    header h1 { margin: 0; font-size: 1.3rem; }
+    header .who { color: var(--muted); font-size: .82rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 22px; box-shadow: 0 24px 60px rgba(0,0,0,.4);
+    }
+    .row { display: flex; gap: 10px; }
+    input[type=text] {
+      flex: 1; padding: 11px 12px; border-radius: 9px; border: 1px solid var(--border);
+      background: #0e1728; color: var(--text); font-size: .95rem;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+    button {
+      padding: 10px 14px; border-radius: 9px; border: 1px solid var(--border);
+      font-size: .88rem; font-weight: 600; cursor: pointer; background: var(--accent);
+      border-color: var(--accent); color: #fff;
+    }
+    button.ghost { background: transparent; color: var(--text); }
+    button.link { background: none; border: none; color: var(--danger); padding: 4px 6px; font-size: .8rem; }
+    button:disabled { opacity: .55; cursor: default; }
+    ul { list-style: none; margin: 18px 0 0; padding: 0; }
+    li {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 11px 4px; border-top: 1px solid var(--border);
+    }
+    li .txt { word-break: break-word; }
+    .empty { color: var(--muted); font-size: .88rem; margin: 18px 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app" hidden>
+    <header>
+      <div>
+        <h1>bloodstain-c5531</h1>
+        <div class="who" id="who"></div>
+      </div>
+      <button class="ghost" id="signOut" type="button">Sign out</button>
+    </header>
+
+    <div class="card">
+      <form class="row" id="addForm">
+        <input type="text" id="itemInput" placeholder="Add an item…" autocomplete="off" required>
+        <button type="submit">Add</button>
+      </form>
+      <ul id="list"></ul>
+      <p class="empty" id="empty" hidden>No items yet — add your first above.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      collection, query, where, orderBy, onSnapshot,
+      addDoc, deleteDoc, doc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const app = document.getElementById("app");
+    const who = document.getElementById("who");
+    const list = document.getElementById("list");
+    const empty = document.getElementById("empty");
+    const input = document.getElementById("itemInput");
+
+    // Escape user content before injecting into innerHTML.
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    let unsubscribe = null;
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        location.replace("./login.html");
+        return;
+      }
+      app.hidden = false;
+      who.textContent = user.email || user.uid;
+      subscribe(user.uid);
+    });
+
+    // Live per-user item list — only this user's items (enforced by rules too).
+    function subscribe(uid) {
+      if (unsubscribe) unsubscribe();
+      const q = query(
+        collection(db, "items"),
+        where("ownerUid", "==", uid),
+        orderBy("createdAt", "desc")
+      );
+      unsubscribe = onSnapshot(q, (snap) => {
+        list.innerHTML = "";
+        empty.hidden = snap.size > 0;
+        snap.forEach((d) => {
+          const li = document.createElement("li");
+          li.innerHTML =
+            `<span class="txt">${escHtml(d.data().text || "")}</span>` +
+            `<button class="link" data-id="${escHtml(d.id)}" type="button">Delete</button>`;
+          list.appendChild(li);
+        });
+      }, (err) => {
+        console.error("items snapshot error:", err);
+      });
+    }
+
+    document.getElementById("addForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      const user = auth.currentUser;
+      if (!text || !user) return;
+      input.value = "";
+      try {
+        await addDoc(collection(db, "items"), {
+          text,
+          ownerUid: user.uid,
+          createdAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.error("add failed:", err);
+        input.value = text;
+      }
+    });
+
+    list.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-id]");
+      if (!btn) return;
+      try {
+        await deleteDoc(doc(db, "items", btn.dataset.id));
+      } catch (err) {
+        console.error("delete failed:", err);
+      }
+    });
+
+    document.getElementById("signOut").addEventListener("click", () => signOut(auth));
+  </script>
+</body>
+</html>
