@@ -29,6 +29,9 @@ export default function AppLayout() {
           </Link>
 
           <div className="flex items-center gap-3">
+            <Link to="/whats-new" className="hidden text-xs text-slate-400 hover:text-brand-300 sm:inline">
+              What's new
+            </Link>
             <span className="hidden text-xs text-slate-400 sm:inline">
               {user?.displayName || user?.email}
             </span>

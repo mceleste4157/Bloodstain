@@ -1,0 +1,86 @@
+[
+  {
+    "hash": "cc4263e",
+    "date": "2026-07-23T02:08:07+00:00",
+    "version": "0.19",
+    "subject": "Review pass: remove legacy demo, refresh docs"
+  },
+  {
+    "hash": "7a7d020",
+    "date": "2026-07-23T02:04:41+00:00",
+    "version": "0.18",
+    "subject": "Make the app an installable PWA"
+  },
+  {
+    "hash": "d88b8fe",
+    "date": "2026-07-23T02:01:55+00:00",
+    "version": null,
+    "subject": "Add interactive stain dragging on the floor plan"
+  },
+  {
+    "hash": "3cb9c37",
+    "date": "2026-07-23T01:58:50+00:00",
+    "version": "0.16",
+    "subject": "Decouple stain (mm) from room units; add directionality help & remove-confirm"
+  },
+  {
+    "hash": "1b9c44b",
+    "date": "2026-07-23T01:52:59+00:00",
+    "version": "0.15",
+    "subject": "Add calculation methodology / \"show your work\" view"
+  },
+  {
+    "hash": "f09707e",
+    "date": "2026-07-23T01:49:48+00:00",
+    "version": "0.14",
+    "subject": "Add BPA pattern classification taxonomy"
+  },
+  {
+    "hash": "6c48928",
+    "date": "2026-07-23T01:44:25+00:00",
+    "version": null,
+    "subject": "Add court-ready PDF report export (Section 8)"
+  },
+  {
+    "hash": "bea66cb",
+    "date": "2026-07-23T01:37:50+00:00",
+    "version": null,
+    "subject": "Add unit-aware stain documentation module (Section 4)"
+  },
+  {
+    "hash": "0b4ae4e",
+    "date": "2026-07-23T01:31:58+00:00",
+    "version": "0.11",
+    "subject": "Show in-app version badge (v0.11) on every screen"
+  },
+  {
+    "hash": "0e37865",
+    "date": "2026-07-23T01:29:17+00:00",
+    "version": null,
+    "subject": "Add Firebase auth and Firestore case persistence (Section 2)"
+  },
+  {
+    "hash": "5f21e8e",
+    "date": "2026-07-23T01:17:06+00:00",
+    "version": null,
+    "subject": "Deploy Hosting only in CI to match service-account permissions"
+  },
+  {
+    "hash": "249b8ec",
+    "date": "2026-07-23T01:11:33+00:00",
+    "version": null,
+    "subject": "Add GitHub Actions workflow to auto-deploy to Firebase Hosting"
+  },
+  {
+    "hash": "b81db63",
+    "date": "2026-07-23T01:09:49+00:00",
+    "version": null,
+    "subject": "Serve only the React build; stop bundling the legacy public/ demo"
+  },
+  {
+    "hash": "9bb89a3",
+    "date": "2026-07-23T00:54:51+00:00",
+    "version": null,
+    "subject": "Add BPA calculations and automatic sketch modules"
+  }
+]

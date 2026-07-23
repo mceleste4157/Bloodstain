@@ -98,16 +98,14 @@ export default function CaseView() {
 
   function addStain() {
     const n = draft!.stains.length + 1;
+    // Start blank so derived values (ratio, impact angle) read "check" until the
+    // investigator enters real measurements — no misleading placeholder angle.
     const stain: Bloodstain = {
       id: `stain-${Date.now()}`,
       stainId: `BS-${String(n).padStart(3, '0')}`,
       surface: 'floor',
-      width: 5,
-      length: 10,
-      directionality: 0,
-      distanceFromLeftWall: 0,
-      distanceFromFrontWall: 0,
-      heightAboveFloor: 0,
+      width: 0,
+      length: 0,
     };
     patch({ stains: [...draft!.stains, stain] });
   }
