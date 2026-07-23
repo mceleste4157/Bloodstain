@@ -17,6 +17,7 @@ import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatInUnit } from '@/lib/calculations';
 import { groupColor, sketchFont, sketchTheme } from '@/lib/sketch/theme';
+import { sceneObjectColor } from '@/lib/bpa/sceneObjects';
 import {
   fitTransform,
   niceScaleBarMm,
@@ -44,6 +45,8 @@ export interface TopViewProps {
   snapMm?: number;
   /** Called with the new (x, y) room-mm position when a stain is dragged. */
   onStainMove?: (stainId: string, x: number, y: number) => void;
+  /** Called with the new (x, y) room-mm position when a scene item is dragged. */
+  onFurnitureMove?: (id: string, x: number, y: number) => void;
 }
 
 export function TopView({
@@ -58,6 +61,7 @@ export function TopView({
   editable = false,
   snapMm = 0,
   onStainMove,
+  onFurnitureMove,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
@@ -68,7 +72,13 @@ export function TopView({
         {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
-        <FurnitureItems room={room} t={t} />
+        <FurnitureItems
+          room={room}
+          t={t}
+          editable={editable}
+          snapMm={snapMm}
+          onFurnitureMove={onFurnitureMove}
+        />
         <DirectionalityLines analysis={analysis} t={t} />
         <Stains
           stains={stains}
@@ -172,30 +182,61 @@ function Fixtures({ room, t }: { room: Room; t: ViewTransform }) {
   return <Group>{segments}</Group>;
 }
 
-function FurnitureItems({ room, t }: { room: Room; t: ViewTransform }) {
+function FurnitureItems({
+  room,
+  t,
+  editable,
+  snapMm,
+  onFurnitureMove,
+}: {
+  room: Room;
+  t: ViewTransform;
+  editable: boolean;
+  snapMm: number;
+  onFurnitureMove?: (id: string, x: number, y: number) => void;
+}) {
   return (
     <Group>
       {(room.furniture ?? []).map((f) => {
         const p = project(t, f.position);
+        const color = sceneObjectColor(f.kind);
+        const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+          const node = e.target;
+          const rp = snapPoint(unproject(t, { x: node.x(), y: node.y() }), snapMm, {
+            width: room.width,
+            height: room.length,
+          });
+          onFurnitureMove?.(f.id, rp.x, rp.y);
+        };
+        // Group positioned at the item's front-left corner; children relative.
         return (
-          <Group key={f.id}>
+          <Group
+            key={f.id}
+            x={p.x}
+            y={p.y}
+            rotation={f.rotation ?? 0}
+            draggable={editable}
+            onDragEnd={editable ? handleDragEnd : undefined}
+          >
             <Rect
-              x={p.x}
-              y={p.y}
+              x={0}
+              y={0}
               width={scaleLength(t, f.width)}
               height={scaleLength(t, f.depth)}
-              rotation={f.rotation ?? 0}
-              stroke={sketchTheme.furniture}
+              stroke={color}
+              fill={color}
+              opacity={0.18}
               strokeWidth={1.5}
-              dash={[4, 3]}
+              dash={f.kind === 'body' ? undefined : [4, 3]}
             />
             <Text
-              x={p.x + 4}
-              y={p.y + 4}
+              x={4}
+              y={4}
               text={f.label}
               fontSize={11}
+              fontStyle={f.kind === 'body' ? 'bold' : 'normal'}
               fontFamily={sketchFont}
-              fill={sketchTheme.furnitureLabel}
+              fill={color}
             />
           </Group>
         );

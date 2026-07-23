@@ -1,5 +1,11 @@
 [
   {
+    "hash": "902cbc1",
+    "date": "2026-07-23T15:11:49+00:00",
+    "version": "0.27",
+    "subject": "Add room features editor: doors, windows, furniture"
+  },
+  {
     "hash": "1b77ea2",
     "date": "2026-07-23T15:08:11+00:00",
     "version": "0.26",

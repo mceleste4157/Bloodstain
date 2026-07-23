@@ -8,6 +8,7 @@
  */
 
 import type { Furniture, LengthUnit, Room, RoomFixture } from '@/types';
+import { SCENE_PRESETS } from '@/lib/bpa/sceneObjects';
 import { LengthInput } from '@/components/LengthInput';
 import { Button } from '@/components/ui';
 
@@ -56,21 +57,37 @@ export function RoomFeaturesPanel({ room, unit, onChange }: Props) {
         makeNew={() => ({ id: newId('win'), wall: 'north', offset: 0, width: 1000, sill: 900 })}
       />
 
-      {/* Furniture */}
+      {/* Scene objects (furniture + body + fixtures) */}
       <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Furniture</h3>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              setFurniture([
-                ...furniture,
-                { id: newId('furn'), label: 'Item', position: { x: 0, y: 0 }, width: 800, depth: 500 },
-              ])
-            }
-          >
-            + Add
-          </Button>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Scene items
+        </h3>
+        {/* Quick-add palette — drops the item at room center to be dragged. */}
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {SCENE_PRESETS.map((preset) => (
+            <button
+              key={preset.kind}
+              onClick={() =>
+                setFurniture([
+                  ...furniture,
+                  {
+                    id: newId('obj'),
+                    kind: preset.kind,
+                    label: preset.label,
+                    width: preset.width,
+                    depth: preset.depth,
+                    position: {
+                      x: Math.max(0, room.width / 2 - preset.width / 2),
+                      y: Math.max(0, room.length / 2 - preset.depth / 2),
+                    },
+                  },
+                ])
+              }
+              className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-200 hover:border-brand-500/60"
+            >
+              + {preset.label}
+            </button>
+          ))}
         </div>
         {furniture.length === 0 ? (
           <p className="text-xs text-slate-500">No furniture.</p>

@@ -86,6 +86,8 @@ export interface RoomFixture {
 export interface Furniture {
   id: string;
   label: string;
+  /** Preset kind (bed, dresser, body, …) from the scene-object catalog. */
+  kind?: string;
   /** Top-view footprint position (front-left corner of the item). */
   position: Point2D;
   width: number;

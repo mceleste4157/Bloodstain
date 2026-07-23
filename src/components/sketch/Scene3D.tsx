@@ -19,6 +19,7 @@ import { Grid, Line, OrbitControls } from '@react-three/drei';
 import type { Bloodstain, Point3D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { groupColor, sketchTheme } from '@/lib/sketch/theme';
+import { sceneObjectColor, sceneObjectHeight } from '@/lib/bpa/sceneObjects';
 
 const S = 0.001; // mm → m
 
@@ -64,6 +65,26 @@ export default function Scene3D({ room, stains, analysis, height = 460 }: Scene3
             <boxGeometry args={[w, h, l]} />
             <meshBasicMaterial color={sketchTheme.wall} wireframe transparent opacity={0.25} />
           </mesh>
+
+          {/* Scene objects (furniture, body, fixtures) as floor-standing boxes */}
+          {(room.furniture ?? []).map((f) => {
+            const oh = sceneObjectHeight(f.kind) * S;
+            const fw = f.width * S;
+            const fd = f.depth * S;
+            // Box centered on the footprint, resting on the floor.
+            const cx = (f.position.x + f.width / 2) * S;
+            const cz = (f.position.y + f.depth / 2) * S;
+            return (
+              <mesh key={f.id} position={[cx, oh / 2, cz]}>
+                <boxGeometry args={[fw, oh, fd]} />
+                <meshStandardMaterial
+                  color={sceneObjectColor(f.kind)}
+                  transparent
+                  opacity={f.kind === 'body' ? 0.85 : 0.5}
+                />
+              </mesh>
+            );
+          })}
 
           {/* Stains */}
           {stains.map((stain) => {

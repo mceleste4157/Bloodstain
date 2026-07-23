@@ -200,6 +200,22 @@ export default function CaseView() {
     setDirty(true);
   }
 
+  /** Reposition a scene item (furniture/body) from a drag on the plan. */
+  function moveFurniture(objId: string, x: number, y: number) {
+    commit((d) => {
+      if (!d.room?.furniture) return d;
+      return {
+        ...d,
+        room: {
+          ...d.room,
+          furniture: d.room.furniture.map((f) =>
+            f.id === objId ? { ...f, position: { x, y } } : f,
+          ),
+        },
+      };
+    });
+  }
+
   async function save() {
     if (!id || !draft) return;
     setSaving(true);
@@ -544,11 +560,13 @@ export default function CaseView() {
                 editable={editSketch}
                 snapMm={snap ? 25 : 0}
                 onStainMove={moveStain}
+                onFurnitureMove={moveFurniture}
               />
             </div>
             {editSketch ? (
               <p className="mt-2 text-xs text-slate-500">
-                Drag a stain to reposition it; its wall distances update live and autosave.
+                Drag a stain or scene item (bed, body, chair…) to reposition it relative to the
+                bloodstains; changes update live and autosave.
               </p>
             ) : null}
           </Card>

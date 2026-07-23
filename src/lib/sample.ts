@@ -26,8 +26,9 @@ export const sampleCase: Case = {
     doors: [{ id: 'd1', wall: 'south', offset: 1600, width: 900 }],
     windows: [{ id: 'w1', wall: 'north', offset: 2800, width: 1000, sill: 900 }],
     furniture: [
-      { id: 'f1', label: 'Sofa', position: { x: 200, y: 200 }, width: 1800, depth: 800 },
-      { id: 'f2', label: 'Table', position: { x: 1600, y: 1900 }, width: 900, depth: 600 },
+      { id: 'f1', kind: 'sofa', label: 'Sofa', position: { x: 200, y: 200 }, width: 1800, depth: 800 },
+      { id: 'f2', kind: 'table', label: 'Table', position: { x: 1600, y: 1900 }, width: 900, depth: 600 },
+      { id: 'f3', kind: 'body', label: 'Body', position: { x: 1600, y: 1000 }, width: 1800, depth: 500 },
     ],
   },
   stains: [
