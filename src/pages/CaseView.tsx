@@ -22,6 +22,7 @@ import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
 import { useCase } from '@/hooks/useCases';
 import { LengthInput } from '@/components/LengthInput';
+import { PhotosPanel } from '@/components/PhotosPanel';
 import { TopView } from '@/components/sketch/TopView';
 import { WallElevation, type WallId } from '@/components/sketch/WallElevation';
 import { Button, Card, Field, Spinner, TextInput } from '@/components/ui';
@@ -196,12 +197,34 @@ export default function CaseView() {
     // Rasterize the currently-rendered sketches (2× for print sharpness).
     const topView = topViewRef.current?.toDataURL({ pixelRatio: 2 });
     const elevation = elevationRef.current?.toDataURL({ pixelRatio: 2 });
+
+    // Fetch evidence photos as data URLs so they can be embedded in the PDF.
+    const labelOf = new Map(draft.stains.map((s) => [s.id, s.stainId]));
+    const { urlToDataUrl } = await import('@/lib/firebase/photos');
+    const photos = (
+      await Promise.all(
+        (draft.photos ?? []).map(async (p) => {
+          if (!p.url) return null;
+          try {
+            return {
+              dataUrl: await urlToDataUrl(p.url),
+              caption: p.caption,
+              linkedLabels: (p.linkedStainIds ?? []).map((id) => labelOf.get(id) ?? id),
+            };
+          } catch {
+            return null;
+          }
+        }),
+      )
+    ).filter((p): p is NonNullable<typeof p> => p !== null);
+
     // Lazy-load the PDF library so it stays out of the initial bundle.
     const { downloadReport } = await import('@/lib/report/generateReport');
     downloadReport(draft, analysis, {
       topView,
       elevation,
       elevationLabel: `Wall elevation — ${wall} wall`,
+      photos,
     });
   }
 
@@ -360,6 +383,20 @@ export default function CaseView() {
             ))}
           </div>
         )}
+      </Card>
+
+      {/* Evidence photos */}
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Evidence photos
+        </h2>
+        <PhotosPanel
+          photos={draft.photos ?? []}
+          stains={draft.stains}
+          ownerUid={draft.ownerUid}
+          caseId={id ?? ''}
+          onChange={(photos) => patch({ photos })}
+        />
       </Card>
 
       {/* Analysis summary — one card per pattern group */}

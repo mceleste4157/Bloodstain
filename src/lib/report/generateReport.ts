@@ -20,6 +20,14 @@ import { categoryCounts, patternLabel } from '@/lib/bpa/patterns';
 import { buildMethodology } from '@/lib/bpa/methodology';
 import { caseRoomUnit } from '@/lib/caseUnit';
 
+export interface ReportPhoto {
+  /** Image data URL. */
+  dataUrl: string;
+  caption?: string;
+  /** Labels of the stains this photo is linked to. */
+  linkedLabels?: string[];
+}
+
 export interface ReportSketchImages {
   /** PNG data URL of the top-view sketch. */
   topView?: string;
@@ -27,6 +35,8 @@ export interface ReportSketchImages {
   elevation?: string;
   /** Human label for the elevation wall, e.g. "North wall". */
   elevationLabel?: string;
+  /** Evidence photos to embed, already fetched as data URLs. */
+  photos?: ReportPhoto[];
 }
 
 const MARGIN = 40; // pt
@@ -207,6 +217,11 @@ export function generateReportDoc(
     addImageSection(doc, images.elevationLabel || 'Wall elevation', images.elevation, y, contentWidth);
   }
 
+  // ---- Evidence photos ----
+  if (images.photos && images.photos.length) {
+    addPhotos(doc, images.photos, contentWidth);
+  }
+
   // ---- Calculation methodology appendix ----
   addMethodology(doc, kase, analysis);
 
@@ -257,6 +272,47 @@ function addImageSection(
   const h = w * ratio;
   doc.addImage(dataUrl, 'PNG', MARGIN, y, w, h);
   return y + h;
+}
+
+function addPhotos(doc: jsPDF, photos: ReportPhoto[], contentWidth: number): void {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  doc.addPage();
+  let y = MARGIN;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Evidence photos', MARGIN, y);
+  y += LINE + 4;
+
+  for (const photo of photos) {
+    let dims: { width: number; height: number };
+    try {
+      dims = doc.getImageProperties(photo.dataUrl);
+    } catch {
+      continue; // skip unreadable image
+    }
+    const w = Math.min(contentWidth, 320);
+    const h = w * (dims.height / dims.width);
+    if (y + h + 40 > pageHeight - MARGIN) {
+      doc.addPage();
+      y = MARGIN;
+    }
+    const format = photo.dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    doc.addImage(photo.dataUrl, format, MARGIN, y, w, h);
+    y += h + 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    if (photo.caption) {
+      doc.text(photo.caption, MARGIN, y);
+      y += 12;
+    }
+    if (photo.linkedLabels && photo.linkedLabels.length) {
+      doc.setTextColor(90);
+      doc.text(`Linked stains: ${photo.linkedLabels.join(', ')}`, MARGIN, y);
+      doc.setTextColor(0);
+      y += 12;
+    }
+    y += 8;
+  }
 }
 
 function addMethodology(doc: jsPDF, kase: Case, analysis: SceneAnalysis): void {

@@ -1,5 +1,11 @@
 [
   {
+    "hash": "ca83340",
+    "date": "2026-07-23T13:07:13+00:00",
+    "version": "0.23",
+    "subject": "Add interactive 3D scene (three.js)"
+  },
+  {
     "hash": "ff9b453",
     "date": "2026-07-23T12:34:28+00:00",
     "version": "0.22",

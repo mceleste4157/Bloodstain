@@ -63,16 +63,18 @@ on top of the typed data model and pure calculation/sketch core.
 - ⬜ Resize objects, add/edit walls & furniture, rotate, undo/redo, zoom/pan.
 - ⬜ Measurement tools: tape measure, coordinate entry, laser-distance entry.
 
-## Section 6 — 3D scene
+## ✅ Section 6 — 3D scene (done)
 
-- `three.js` scene: room, stains, trajectory (stringing) lines from
-  `areaOfOrigin`, estimated area of origin volume; orbit/zoom/rotate controls.
-- Reuses `analyzeScene` output directly — no new math.
+- `three.js` (react-three-fiber + drei) scene: room, stains, and per-group
+  trajectory (stringing) lines to the reconstructed area of origin; orbit/zoom/
+  pan. Reuses `analyzeScene` — no new math. Lazy-loaded behind a toggle.
 
-## Section 7 — Photo module
+## 🟡 Section 7 — Photo module (upload/link done)
 
-- Upload to Firebase Storage; tag stains, draw annotations, measurement/evidence
-  markers; link photos to stains (`CasePhoto.linkedStainIds`).
+- ✅ Upload photos to Firebase Storage (per-owner path + rules), thumbnails,
+  captions, link photos to stains (`CasePhoto.linkedStainIds`), delete, and
+  embed photos in the PDF report.
+- ⬜ On-photo annotations / measurement & evidence markers.
 
 ## ✅ Section 8 — Reports (jsPDF) (done)
 

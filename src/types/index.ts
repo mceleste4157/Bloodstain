@@ -170,7 +170,10 @@ export interface Party {
 
 export interface CasePhoto {
   id: string;
+  /** Firebase Storage object path (used for deletion). */
   storagePath: string;
+  /** Public download URL for display and report embedding. */
+  url?: string;
   caption?: string;
   linkedStainIds?: string[];
   createdAt?: number;
