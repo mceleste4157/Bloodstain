@@ -6,18 +6,18 @@
  * instant a measurement changes — before anything is saved. An explicit Save
  * writes the whole case back to Firestore; a dirty indicator shows unsaved work.
  *
- * Numeric measurements are entered in millimeters (the canonical unit) in this
- * section; unit-aware inputs arrive with the dedicated stain-documentation
- * module (docs/ROADMAP.md, Section 4). Derived values and sketch labels already
- * honor the case's metric/imperial setting.
+ * Measurements are entered in the case's display unit (cm or in) via
+ * unit-aware inputs and stored canonically in millimeters. Live validation
+ * flags impossible or inconsistent measurements as they're typed.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { Bloodstain, Case, SurfaceType, UnitSystem } from '@/types';
-import { analyzeScene, formatLength } from '@/lib/calculations';
+import type { Bloodstain, Case, Room, StainCalculations, SurfaceType, UnitSystem } from '@/types';
+import { analyzeScene, axisDiscrepancy, displayUnit, formatLength } from '@/lib/calculations';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
 import { useCase } from '@/hooks/useCases';
+import { LengthInput } from '@/components/LengthInput';
 import { TopView } from '@/components/sketch/TopView';
 import { WallElevation, type WallId } from '@/components/sketch/WallElevation';
 import { Button, Card, Field, Spinner, TextInput } from '@/components/ui';
@@ -69,6 +69,8 @@ export default function CaseView() {
       </Card>
     );
   }
+
+  const unit = displayUnit(draft.unitSystem);
 
   function patch(updates: Partial<Case>) {
     setDraft((d) => (d ? { ...d, ...updates } : d));
@@ -212,24 +214,30 @@ export default function CaseView() {
       {/* Room */}
       <Card>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Room dimensions (mm)
+          Room dimensions ({unit})
         </h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          <NumberField
-            label="Width (left→right)"
-            value={draft.room?.width}
-            onChange={(v) => patch({ room: { ...roomOf(draft), width: v ?? 0 } })}
-          />
-          <NumberField
-            label="Length (front→rear)"
-            value={draft.room?.length}
-            onChange={(v) => patch({ room: { ...roomOf(draft), length: v ?? 0 } })}
-          />
-          <NumberField
-            label="Height (floor→ceiling)"
-            value={draft.room?.height}
-            onChange={(v) => patch({ room: { ...roomOf(draft), height: v ?? 0 } })}
-          />
+          <Field label={`Width, left→right (${unit})`}>
+            <LengthInput
+              valueMm={draft.room?.width}
+              unitSystem={draft.unitSystem}
+              onChangeMm={(v) => patch({ room: { ...roomOf(draft), width: v ?? 0 } })}
+            />
+          </Field>
+          <Field label={`Length, front→rear (${unit})`}>
+            <LengthInput
+              valueMm={draft.room?.length}
+              unitSystem={draft.unitSystem}
+              onChangeMm={(v) => patch({ room: { ...roomOf(draft), length: v ?? 0 } })}
+            />
+          </Field>
+          <Field label={`Height, floor→ceiling (${unit})`}>
+            <LengthInput
+              valueMm={draft.room?.height}
+              unitSystem={draft.unitSystem}
+              onChangeMm={(v) => patch({ room: { ...roomOf(draft), height: v ?? 0 } })}
+            />
+          </Field>
         </div>
       </Card>
 
@@ -248,88 +256,17 @@ export default function CaseView() {
           <p className="text-sm text-slate-400">No stains documented yet.</p>
         ) : (
           <div className="space-y-3">
-            {draft.stains.map((stain) => {
-              const calc = analysis?.stainResults[stain.id];
-              return (
-                <div key={stain.id} className="rounded-lg border border-surface-border p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <input
-                      value={stain.stainId}
-                      onChange={(e) => patchStain(stain.id, { stainId: e.target.value })}
-                      className="w-28 rounded bg-surface px-2 py-1 text-sm font-semibold text-brand-300 focus:outline-none"
-                    />
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
-                      <span>
-                        W:L {Number.isFinite(calc?.widthToLengthRatio ?? NaN)
-                          ? calc!.widthToLengthRatio.toFixed(3)
-                          : '—'}
-                      </span>
-                      <span>
-                        Angle{' '}
-                        {calc?.impactAngleDeg == null ? (
-                          <span className="text-amber-400">check</span>
-                        ) : (
-                          `${calc.impactAngleDeg.toFixed(1)}°`
-                        )}
-                      </span>
-                      <button
-                        onClick={() => removeStain(stain.id)}
-                        className="text-red-400 hover:text-red-300"
-                        aria-label={`Remove ${stain.stainId}`}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                    <Field label="Surface">
-                      <select
-                        value={stain.surface}
-                        onChange={(e) => patchStain(stain.id, { surface: e.target.value as SurfaceType })}
-                        className="min-h-[44px] w-full rounded-lg border border-surface-border bg-surface px-2 py-2 text-sm text-slate-100 focus:border-brand-500 focus:outline-none"
-                      >
-                        {SURFACES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <NumberField
-                      label="Width (mm)"
-                      value={stain.width}
-                      onChange={(v) => patchStain(stain.id, { width: v ?? 0 })}
-                    />
-                    <NumberField
-                      label="Length (mm)"
-                      value={stain.length}
-                      onChange={(v) => patchStain(stain.id, { length: v ?? 0 })}
-                    />
-                    <NumberField
-                      label="Directionality (°)"
-                      value={stain.directionality}
-                      onChange={(v) => patchStain(stain.id, { directionality: v })}
-                    />
-                    <NumberField
-                      label="From left wall (mm)"
-                      value={stain.distanceFromLeftWall}
-                      onChange={(v) => patchStain(stain.id, { distanceFromLeftWall: v })}
-                    />
-                    <NumberField
-                      label="From front wall (mm)"
-                      value={stain.distanceFromFrontWall}
-                      onChange={(v) => patchStain(stain.id, { distanceFromFrontWall: v })}
-                    />
-                    <NumberField
-                      label="Height above floor (mm)"
-                      value={stain.heightAboveFloor}
-                      onChange={(v) => patchStain(stain.id, { heightAboveFloor: v })}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            {draft.stains.map((stain) => (
+              <StainEditor
+                key={stain.id}
+                stain={stain}
+                unitSystem={draft.unitSystem}
+                room={draft.room}
+                calc={analysis?.stainResults[stain.id]}
+                onChange={(u) => patchStain(stain.id, u)}
+                onRemove={() => removeStain(stain.id)}
+              />
+            ))}
           </div>
         )}
       </Card>
@@ -434,8 +371,206 @@ function SummaryStat({ label, value, sub }: { label: string; value: string; sub?
   );
 }
 
-/** Numeric input that maps blank → undefined and rejects non-numbers. */
-function NumberField({
+/** Discrepancy above which a redundant-measurement mismatch is flagged (mm). */
+const DISCREPANCY_THRESHOLD_MM = 10;
+
+/**
+ * Editor for a single bloodstain: all documentation fields with unit-aware
+ * inputs plus live validation warnings for physically impossible or mutually
+ * inconsistent measurements.
+ */
+function StainEditor({
+  stain,
+  unitSystem,
+  room,
+  calc,
+  onChange,
+  onRemove,
+}: {
+  stain: Bloodstain;
+  unitSystem: UnitSystem;
+  room?: Room;
+  calc?: StainCalculations;
+  onChange: (updates: Partial<Bloodstain>) => void;
+  onRemove: () => void;
+}) {
+  const unit = displayUnit(unitSystem);
+  const warnings = stainWarnings(stain, room, unitSystem);
+
+  return (
+    <div className="rounded-lg border border-surface-border p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <input
+          value={stain.stainId}
+          onChange={(e) => onChange({ stainId: e.target.value })}
+          className="w-28 rounded bg-surface px-2 py-1 text-sm font-semibold text-brand-300 focus:outline-none"
+          aria-label="Stain ID"
+        />
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <span>
+            W:L{' '}
+            {Number.isFinite(calc?.widthToLengthRatio ?? NaN)
+              ? calc!.widthToLengthRatio.toFixed(3)
+              : '—'}
+          </span>
+          <span>
+            Angle{' '}
+            {calc?.impactAngleDeg == null ? (
+              <span className="text-amber-400">check</span>
+            ) : (
+              `${calc.impactAngleDeg.toFixed(1)}°`
+            )}
+          </span>
+          <button
+            onClick={onRemove}
+            className="text-red-400 hover:text-red-300"
+            aria-label={`Remove ${stain.stainId}`}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <Field label="Surface">
+          <select
+            value={stain.surface}
+            onChange={(e) => onChange({ surface: e.target.value as SurfaceType })}
+            className="min-h-[44px] w-full rounded-lg border border-surface-border bg-surface px-2 py-2 text-sm text-slate-100 focus:border-brand-500 focus:outline-none"
+          >
+            {SURFACES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={`Width (${unit})`}>
+          <LengthInput
+            valueMm={stain.width}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ width: v ?? 0 })}
+          />
+        </Field>
+        <Field label={`Length (${unit})`}>
+          <LengthInput
+            valueMm={stain.length}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ length: v ?? 0 })}
+          />
+        </Field>
+        <Field label={`Diameter (${unit})`}>
+          <LengthInput
+            valueMm={stain.diameter}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ diameter: v })}
+          />
+        </Field>
+        <DegreeField
+          label="Directionality (°)"
+          value={stain.directionality}
+          onChange={(v) => onChange({ directionality: v })}
+        />
+        <Field label={`From left wall (${unit})`}>
+          <LengthInput
+            valueMm={stain.distanceFromLeftWall}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ distanceFromLeftWall: v })}
+          />
+        </Field>
+        <Field label={`From right wall (${unit})`}>
+          <LengthInput
+            valueMm={stain.distanceFromRightWall}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ distanceFromRightWall: v })}
+          />
+        </Field>
+        <Field label={`From front wall (${unit})`}>
+          <LengthInput
+            valueMm={stain.distanceFromFrontWall}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ distanceFromFrontWall: v })}
+          />
+        </Field>
+        <Field label={`From rear wall (${unit})`}>
+          <LengthInput
+            valueMm={stain.distanceFromRearWall}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ distanceFromRearWall: v })}
+          />
+        </Field>
+        <Field label={`Height above floor (${unit})`}>
+          <LengthInput
+            valueMm={stain.heightAboveFloor}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ heightAboveFloor: v })}
+          />
+        </Field>
+        <Field label={`From ceiling (${unit})`}>
+          <LengthInput
+            valueMm={stain.distanceFromCeiling}
+            unitSystem={unitSystem}
+            onChangeMm={(v) => onChange({ distanceFromCeiling: v })}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <Field label="Description">
+          <TextInput
+            value={stain.description ?? ''}
+            onChange={(e) => onChange({ description: e.target.value })}
+          />
+        </Field>
+        <Field label="Notes">
+          <TextInput
+            value={stain.notes ?? ''}
+            onChange={(e) => onChange({ notes: e.target.value })}
+          />
+        </Field>
+      </div>
+
+      {warnings.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {warnings.map((w, i) => (
+            <li key={i} className="rounded bg-amber-950/50 px-2 py-1 text-xs text-amber-300">
+              ⚠ {w}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Validation messages for a stain's measurements: physically impossible shape
+ * and redundant-measurement mismatches (a near-wall + far-wall distance that
+ * don't agree with the room span, catching transcription errors).
+ */
+function stainWarnings(stain: Bloodstain, room: Room | undefined, system: UnitSystem): string[] {
+  const out: string[] = [];
+
+  if (stain.width > 0 && stain.length > 0 && stain.width > stain.length) {
+    out.push('Width exceeds length — the impact angle cannot be computed. Re-check the axes.');
+  }
+
+  const checks: Array<[string, number | null]> = [
+    ['left/right wall', axisDiscrepancy(stain.distanceFromLeftWall, stain.distanceFromRightWall, room?.width)],
+    ['front/rear wall', axisDiscrepancy(stain.distanceFromFrontWall, stain.distanceFromRearWall, room?.length)],
+    ['floor/ceiling', axisDiscrepancy(stain.heightAboveFloor, stain.distanceFromCeiling, room?.height)],
+  ];
+  for (const [name, discrepancy] of checks) {
+    if (discrepancy !== null && discrepancy > DISCREPANCY_THRESHOLD_MM) {
+      out.push(`${name} measurements disagree by ${formatLength(discrepancy, system)} — check the room size or the distances.`);
+    }
+  }
+
+  return out;
+}
+
+/** Degree input (kept in raw degrees; angles are not unit-converted). */
+function DegreeField({
   label,
   value,
   onChange,
