@@ -26,6 +26,7 @@ import { useCase } from '@/hooks/useCases';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import { LengthInput } from '@/components/LengthInput';
 import { PhotosPanel } from '@/components/PhotosPanel';
+import { RoomFeaturesPanel } from '@/components/RoomFeaturesPanel';
 import { TopView } from '@/components/sketch/TopView';
 import { WallElevation, type WallId } from '@/components/sketch/WallElevation';
 import { Button, Card, Field, Spinner, TextInput } from '@/components/ui';
@@ -385,6 +386,17 @@ export default function CaseView() {
               onChangeMm={(v) => patch({ room: { ...roomOf(draft), height: v ?? 0 } })}
             />
           </Field>
+        </div>
+
+        <div className="mt-4 border-t border-surface-border pt-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Doors, windows &amp; furniture
+          </h3>
+          <RoomFeaturesPanel
+            room={roomOf(draft)}
+            unit={roomUnit}
+            onChange={(room) => patch({ room })}
+          />
         </div>
       </Card>
 
