@@ -12,6 +12,7 @@
  */
 
 import { Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import type Konva from 'konva';
 import type { Bloodstain, Room, UnitSystem } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatLength } from '@/lib/calculations';
@@ -28,6 +29,8 @@ export interface WallElevationProps {
   wall: WallId;
   width?: number;
   height?: number;
+  /** Ref to the underlying Konva stage, e.g. for PDF raster export. */
+  stageRef?: React.Ref<Konva.Stage>;
 }
 
 /** Width of the wall being viewed (its horizontal extent). */
@@ -50,6 +53,7 @@ export function WallElevation({
   wall,
   width = 800,
   height = 480,
+  stageRef,
 }: WallElevationProps) {
   const extent = wallExtent(room, wall);
   const t = fitTransform({ width: extent, height: room.height }, { width, height });
@@ -62,7 +66,7 @@ export function WallElevation({
   const wallStains = stains.filter((s) => s.surface === WALL_SURFACE[wall]);
 
   return (
-    <Stage width={width} height={height} style={{ background: sketchTheme.background }}>
+    <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
       <Layer listening={false}>
         {/* Wall rectangle */}
         <Rect

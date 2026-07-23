@@ -11,8 +11,9 @@
  * flags impossible or inconsistent measurements as they're typed.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import type Konva from 'konva';
 import type { Bloodstain, Case, Room, StainCalculations, SurfaceType, UnitSystem } from '@/types';
 import { analyzeScene, axisDiscrepancy, displayUnit, formatLength } from '@/lib/calculations';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
@@ -44,6 +45,10 @@ export default function CaseView() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [wall, setWall] = useState<WallId>('north');
+
+  // Konva stage refs, used to rasterize the sketches into the PDF report.
+  const topViewRef = useRef<Konva.Stage>(null);
+  const elevationRef = useRef<Konva.Stage>(null);
 
   // Seed the draft once the case loads (and when a different case is opened).
   useEffect(() => {
@@ -131,6 +136,20 @@ export default function CaseView() {
     }
   }
 
+  async function handleReport() {
+    if (!draft || !analysis) return;
+    // Rasterize the currently-rendered sketches (2× for print sharpness).
+    const topView = topViewRef.current?.toDataURL({ pixelRatio: 2 });
+    const elevation = elevationRef.current?.toDataURL({ pixelRatio: 2 });
+    // Lazy-load the PDF library so it stays out of the initial bundle.
+    const { downloadReport } = await import('@/lib/report/generateReport');
+    downloadReport(draft, analysis, {
+      topView,
+      elevation,
+      elevationLabel: `Wall elevation — ${wall} wall`,
+    });
+  }
+
   return (
     <div className="space-y-6 pb-24">
       {/* Header / actions */}
@@ -144,6 +163,9 @@ export default function CaseView() {
         <div className="flex items-center gap-2">
           <Button variant="danger" onClick={handleDelete}>
             Delete
+          </Button>
+          <Button variant="secondary" onClick={handleReport}>
+            Generate PDF
           </Button>
           <Button onClick={save} disabled={saving || !dirty}>
             {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
@@ -313,6 +335,7 @@ export default function CaseView() {
             </h2>
             <div className="overflow-x-auto">
               <TopView
+                stageRef={topViewRef}
                 room={draft.room}
                 stains={draft.stains}
                 analysis={analysis}
@@ -341,6 +364,7 @@ export default function CaseView() {
             </div>
             <div className="overflow-x-auto">
               <WallElevation
+                stageRef={elevationRef}
                 room={draft.room}
                 stains={draft.stains}
                 analysis={analysis}

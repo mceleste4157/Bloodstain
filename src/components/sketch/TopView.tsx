@@ -12,6 +12,7 @@
  */
 
 import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import type Konva from 'konva';
 import type { Bloodstain, Point2D, Room, UnitSystem } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatLength } from '@/lib/calculations';
@@ -33,6 +34,8 @@ export interface TopViewProps {
   height?: number;
   /** Grid spacing in mm; omit to hide the grid. */
   gridMm?: number;
+  /** Ref to the underlying Konva stage, e.g. for PDF raster export. */
+  stageRef?: React.Ref<Konva.Stage>;
 }
 
 export function TopView({
@@ -43,12 +46,13 @@ export function TopView({
   width = 800,
   height = 600,
   gridMm = 500,
+  stageRef,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
 
   return (
-    <Stage width={width} height={height} style={{ background: sketchTheme.background }}>
+    <Stage ref={stageRef} width={width} height={height} style={{ background: sketchTheme.background }}>
       <Layer listening={false}>
         {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
