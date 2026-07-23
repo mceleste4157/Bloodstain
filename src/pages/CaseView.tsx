@@ -19,6 +19,7 @@ import type { Bloodstain, Case, LengthUnit, Room, StainCalculations, SurfaceType
 import { analyzeScene, axisDiscrepancy, formatInUnit } from '@/lib/calculations';
 import { PATTERN_GROUPS } from '@/lib/bpa/patterns';
 import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
+import { canRedo, canUndo, initHistory, pushHistory, redo, undo, type History } from '@/lib/history';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
 import { logAudit } from '@/lib/firebase/audit';
 import { useCase } from '@/hooks/useCases';
@@ -50,8 +51,9 @@ export default function CaseView() {
   const { kase, loading, error } = useCase(id);
   const { entries: auditEntries } = useAuditLog(id);
 
-  // Editable working copy, seeded from the loaded case.
-  const [draft, setDraft] = useState<Case | null>(null);
+  // Editable working copy with undo/redo history, seeded from the loaded case.
+  const [history, setHistory] = useState<History<Case> | null>(null);
+  const draft = history?.present ?? null;
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -66,11 +68,26 @@ export default function CaseView() {
 
   // Seed the draft once the case loads (and when a different case is opened).
   useEffect(() => {
-    if (kase && (!draft || draft.id !== kase.id)) {
-      setDraft(kase);
+    if (kase && (!history || history.present.id !== kase.id)) {
+      setHistory(initHistory(kase));
       setDirty(false);
     }
-  }, [kase, draft]);
+  }, [kase, history]);
+
+  // Keyboard undo/redo (Cmd/Ctrl+Z, add Shift to redo), except while typing in a
+  // field where native input undo should win.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      e.preventDefault();
+      setHistory((h) => (h ? (e.shiftKey ? redo(h) : undo(h)) : h));
+      setDirty(true);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const analysis = useMemo(
     () => (draft ? analyzeScene(draft.stains, draft.room) : null),
@@ -104,47 +121,62 @@ export default function CaseView() {
   const groupNames = Array.from(
     new Set(draft.stains.map((s) => (s.group ?? '').trim()).filter(Boolean)),
   );
+  const undoable = !!history && canUndo(history);
+  const redoable = !!history && canRedo(history);
+
+  function doUndo() {
+    setHistory((h) => (h ? undo(h) : h));
+    setDirty(true);
+  }
+  function doRedo() {
+    setHistory((h) => (h ? redo(h) : h));
+    setDirty(true);
+  }
+
+  /** Record a new draft state (pushing the previous onto the undo stack). */
+  function commit(update: (prev: Case) => Case) {
+    setHistory((h) => (h ? pushHistory(h, update(h.present)) : h));
+    setDirty(true);
+  }
 
   function patch(updates: Partial<Case>) {
-    setDraft((d) => (d ? { ...d, ...updates } : d));
-    setDirty(true);
+    commit((d) => ({ ...d, ...updates }));
   }
 
   function patchStain(stainId: string, updates: Partial<Bloodstain>) {
-    setDraft((d) =>
-      d
-        ? { ...d, stains: d.stains.map((s) => (s.id === stainId ? { ...s, ...updates } : s)) }
-        : d,
-    );
-    setDirty(true);
+    commit((d) => ({
+      ...d,
+      stains: d.stains.map((s) => (s.id === stainId ? { ...s, ...updates } : s)),
+    }));
   }
 
   function addStain() {
-    const n = draft!.stains.length + 1;
-    // Inherit the previous stain's group so a run of stains for one pattern all
-    // land together without re-typing the group each time.
-    const lastGroup = draft!.stains[draft!.stains.length - 1]?.group;
-    // Start blank so derived values (ratio, impact angle) read "check" until the
-    // investigator enters real measurements — no misleading placeholder angle.
-    const stain: Bloodstain = {
-      id: `stain-${Date.now()}`,
-      stainId: `BS-${String(n).padStart(3, '0')}`,
-      surface: 'floor',
-      group: lastGroup,
-      width: 0,
-      length: 0,
-    };
-    patch({ stains: [...draft!.stains, stain] });
+    commit((d) => {
+      const n = d.stains.length + 1;
+      // Inherit the previous stain's group so a run of stains for one pattern
+      // all land together without re-typing the group each time.
+      const lastGroup = d.stains[d.stains.length - 1]?.group;
+      // Start blank so derived values (ratio, impact angle) read "check" until
+      // the investigator enters real measurements — no misleading angle.
+      const stain: Bloodstain = {
+        id: `stain-${Date.now()}`,
+        stainId: `BS-${String(n).padStart(3, '0')}`,
+        surface: 'floor',
+        group: lastGroup,
+        width: 0,
+        length: 0,
+      };
+      return { ...d, stains: [...d.stains, stain] };
+    });
   }
 
   function removeStain(stainId: string) {
-    patch({ stains: draft!.stains.filter((s) => s.id !== stainId) });
+    commit((d) => ({ ...d, stains: d.stains.filter((s) => s.id !== stainId) }));
   }
 
   /** Reposition a stain from a drag on the top-view plan (x, y in room mm). */
   function moveStain(stainId: string, x: number, y: number) {
-    setDraft((d) => {
-      if (!d) return d;
+    commit((d) => {
       const width = d.room?.width;
       const length = d.room?.length;
       return {
@@ -245,6 +277,12 @@ export default function CaseView() {
         </div>
         <div className="flex items-center gap-2">
           <SaveStatus saving={saving} dirty={dirty} error={saveError} onRetry={save} />
+          <Button variant="ghost" onClick={doUndo} disabled={!undoable} title="Undo (Ctrl/Cmd+Z)">
+            Undo
+          </Button>
+          <Button variant="ghost" onClick={doRedo} disabled={!redoable} title="Redo (Ctrl/Cmd+Shift+Z)">
+            Redo
+          </Button>
           <Button variant="danger" onClick={handleDelete}>
             Delete
           </Button>
