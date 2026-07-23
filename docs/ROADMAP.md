@@ -56,14 +56,12 @@ on top of the typed data model and pure calculation/sketch core.
   "check measurement", axis discrepancy warnings from `axisDiscrepancy`).
 - Metric/imperial toggle wired to `unitSystem`.
 
-## Section 5 — Interactive sketch editor
+## 🟡 Section 5 — Interactive sketch editor (partial)
 
-- Drag stains, resize objects, add/edit walls & furniture, snap-to-grid,
-  rotate, undo/redo, zoom, pan — all mutating the case model so calculations and
-  the other views stay in sync (the `viewport.ts` transform already backs
-  screen↔room mapping).
-- Measurement tools: tape measure, coordinate entry, laser-distance entry,
-  grid system.
+- ✅ Drag stains on the top view with snap-to-grid; drops convert back to room
+  coordinates and update wall distances live (`viewport.unproject`/`snapPoint`).
+- ⬜ Resize objects, add/edit walls & furniture, rotate, undo/redo, zoom/pan.
+- ⬜ Measurement tools: tape measure, coordinate entry, laser-distance entry.
 
 ## Section 6 — 3D scene
 
@@ -76,18 +74,29 @@ on top of the typed data model and pure calculation/sketch core.
 - Upload to Firebase Storage; tag stains, draw annotations, measurement/evidence
   markers; link photos to stains (`CasePhoto.linkedStainIds`).
 
-## Section 8 — Reports (jsPDF)
+## ✅ Section 8 — Reports (jsPDF) (done)
 
-- Court-ready PDF: case info, investigator, photos, stain measurements,
-  calculations, sketches (raster export of the Konva stages), 3D image, tables,
-  notes, signature page.
+- Court-ready PDF: case info, measurements, pattern breakdown, calculated
+  results, per-stain stringing, embedded sketches (raster export of the Konva
+  stages), calculation-methodology appendix, and a signature page. Lazy-loaded.
+- ⬜ Still to add: evidence photos and the 3D image (pending those modules).
 
-## Section 9 — Security hardening & PWA
+## 🟡 Section 9 — Security hardening & PWA (PWA done)
 
-- Role-based permissions (`UserRole`), audit log (`AuditLogEntry`) writes on
-  mutations, tighter Firestore rules, backups, encrypted-storage review, CJIS
-  posture (no anonymous access).
-- PWA: manifest, service worker, offline cache, home-screen install.
+- ✅ PWA: manifest, service worker (autoUpdate), offline shell, home-screen
+  install, app icons.
+- ⬜ Role-based permissions (`UserRole`), audit log (`AuditLogEntry`) writes on
+  mutations, tighter Firestore rules, backups, encrypted-storage review.
+
+## ✅ BPA domain features (added beyond the original plan)
+
+- **Pattern classification** taxonomy (passive / spatter / transfer / altered,
+  OSAC-aligned) on every stain, in the editor and the report.
+- **Calculation methodology page** and PDF appendix — every derived value shown
+  with its formula, substituted numbers, and result (court-defensible).
+- **Decoupled units**: stain sizes always mm; room/distances in ft/in/cm/m.
+- **In-app version badge** for deploy confirmation; **auto-deploy** via GitHub
+  Actions.
 
 ## Section 10 — Future modules (design already accommodates)
 
@@ -98,7 +107,8 @@ same `Case`/`Bloodstain` model and `analyzeScene` pipeline.
 
 ## Notes
 
-- The original plain-HTML Firebase demo remains under `public/` as a reference
-  for the Auth/Firestore wiring; Hosting now serves the React build from
-  `dist/`. The demo files can be removed once Section 2 lands the auth flow in
-  the React app.
+- The original plain-HTML Firebase demo (formerly under `public/`) has been
+  removed; Hosting serves the React build from `dist/`, and PWA assets live in
+  `public-pwa/`.
+- CI deploys Hosting only; the Firestore `cases` rule must be published once
+  (Console → Firestore → Rules, or `firebase deploy --only firestore:rules`).

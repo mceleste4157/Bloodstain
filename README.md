@@ -55,10 +55,14 @@ changes.
 
 ## Project layout
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). In short: pure, tested
-forensic math and sketch geometry in `src/lib`, a shared typed data model in
-`src/types`, and thin React/Konva rendering in `src/components`.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+[`docs/ROADMAP.md`](docs/ROADMAP.md). In short: pure, tested forensic math and
+sketch geometry in `src/lib`, a shared typed data model in `src/types`, thin
+React/Konva rendering in `src/components`, and pages in `src/pages`. PWA assets
+live in `public-pwa/`.
 
-The original plain-HTML Firebase demo remains under `public/` as a reference
-for the Auth/Firestore wiring and is superseded by the React app once Section 2
-lands.
+Beyond the original spec the app now includes auth + Firestore persistence, a
+dashboard, the stain-documentation module, pattern classification, a
+calculation-methodology page, court-ready PDF export, interactive stain
+dragging, and installable-PWA support. A small version badge (bottom-right)
+reflects the deployed build.
