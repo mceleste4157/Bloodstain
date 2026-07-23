@@ -1,5 +1,11 @@
 [
   {
+    "hash": "ff9b453",
+    "date": "2026-07-23T12:34:28+00:00",
+    "version": "0.22",
+    "subject": "Autosave case edits with a live save-status indicator"
+  },
+  {
     "hash": "c8a4cb7",
     "date": "2026-07-23T02:20:44+00:00",
     "version": "0.21",

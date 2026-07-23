@@ -12,7 +12,7 @@
  * flags impossible or inconsistent measurements as they're typed.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type Konva from 'konva';
 import type { Bloodstain, Case, LengthUnit, Room, StainCalculations, SurfaceType } from '@/types';
@@ -25,6 +25,10 @@ import { LengthInput } from '@/components/LengthInput';
 import { TopView } from '@/components/sketch/TopView';
 import { WallElevation, type WallId } from '@/components/sketch/WallElevation';
 import { Button, Card, Field, Spinner, TextInput } from '@/components/ui';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Heavy (three.js) — only downloaded when the user opens the 3D scene.
+const Scene3D = lazy(() => import('@/components/sketch/Scene3D'));
 
 const SURFACES: SurfaceType[] = [
   'floor',
@@ -50,6 +54,7 @@ export default function CaseView() {
   const [wall, setWall] = useState<WallId>('north');
   const [editSketch, setEditSketch] = useState(false);
   const [snap, setSnap] = useState(true);
+  const [show3D, setShow3D] = useState(false);
 
   // Konva stage refs, used to rasterize the sketches into the PDF report.
   const topViewRef = useRef<Konva.Stage>(null);
@@ -451,7 +456,7 @@ export default function CaseView() {
             </div>
             {editSketch ? (
               <p className="mt-2 text-xs text-slate-500">
-                Drag a stain to reposition it; its wall distances update live. Remember to Save.
+                Drag a stain to reposition it; its wall distances update live and autosave.
               </p>
             ) : null}
           </Card>
@@ -484,6 +489,42 @@ export default function CaseView() {
                 height={420}
               />
             </div>
+          </Card>
+
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                3D scene
+              </h2>
+              <Button variant="secondary" onClick={() => setShow3D((v) => !v)}>
+                {show3D ? 'Hide 3D' : 'Show 3D scene'}
+              </Button>
+            </div>
+            {show3D ? (
+              <ErrorBoundary
+                fallback={
+                  <p className="text-sm text-red-400">
+                    The 3D view couldn't be displayed (WebGL may be unavailable on this device). The
+                    2D sketches above show the same reconstruction.
+                  </p>
+                }
+              >
+                <Suspense
+                  fallback={
+                    <div className="flex h-[460px] items-center justify-center">
+                      <Spinner label="Loading 3D…" />
+                    </div>
+                  }
+                >
+                  <Scene3D room={draft.room} stains={draft.stains} analysis={analysis} />
+                </Suspense>
+              </ErrorBoundary>
+            ) : (
+              <p className="text-sm text-slate-400">
+                An interactive 3D view of the room, stains, and each group's trajectory lines and
+                area of origin. Drag to orbit, scroll to zoom.
+              </p>
+            )}
           </Card>
         </>
       ) : null}
