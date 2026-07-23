@@ -37,10 +37,16 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 // Heavy (three.js) — only downloaded when the user opens the 3D scene.
 const Scene3D = lazy(() => import('@/components/sketch/Scene3D'));
 
-// Top-view canvas size (must match the <TopView> props for drop-coordinate math).
+// Canvas sizes (must match the sketch props for drop-coordinate math).
 const TOPVIEW_W = 820;
 const TOPVIEW_H = 600;
+const WALLVIEW_W = 820;
+const WALLVIEW_H = 420;
 const DND_MIME = 'application/x-bpa-object';
+/** Sentinel dragged value for a new bloodstain (vs. a scene-object kind). */
+const STAIN_DND = '__stain__';
+
+const clampRange = (v: number, max: number) => Math.max(0, Math.min(max, v));
 
 const SURFACES: SurfaceType[] = [
   'floor',
@@ -228,7 +234,59 @@ export default function CaseView() {
     });
   }
 
-  /** Handle a scene-item chip dropped onto the top-view plan. */
+  /** Add a new floor bloodstain at a room point (mm), blank until measured. */
+  function addStainAt(roomX: number, roomY: number) {
+    commit((d) => {
+      const n = d.stains.length + 1;
+      const lastGroup = d.stains[d.stains.length - 1]?.group;
+      const stain: Bloodstain = {
+        id: `stain-${Date.now()}`,
+        stainId: `BS-${String(n).padStart(3, '0')}`,
+        surface: 'floor',
+        group: lastGroup,
+        width: 0,
+        length: 0,
+        distanceFromLeftWall: Math.round(roomX),
+        distanceFromFrontWall: Math.round(roomY),
+        heightAboveFloor: 0,
+      };
+      return { ...d, stains: [...d.stains, stain] };
+    });
+  }
+
+  /** Add a stain on a wall at an along-wall distance and height (mm). */
+  function addWallStainAt(wallId: WallId, alongWall: number, z: number) {
+    commit((d) => {
+      const n = d.stains.length + 1;
+      const lastGroup = d.stains[d.stains.length - 1]?.group;
+      const stain: Bloodstain = {
+        id: `stain-${Date.now()}`,
+        stainId: `BS-${String(n).padStart(3, '0')}`,
+        surface: `${wallId}-wall`,
+        group: lastGroup,
+        width: 0,
+        length: 0,
+        heightAboveFloor: Math.round(z),
+      };
+      const a = Math.round(alongWall);
+      if (wallId === 'north') {
+        stain.distanceFromLeftWall = a;
+        stain.distanceFromFrontWall = 0;
+      } else if (wallId === 'south') {
+        stain.distanceFromLeftWall = a;
+        stain.distanceFromRearWall = 0;
+      } else if (wallId === 'west') {
+        stain.distanceFromFrontWall = a;
+        stain.distanceFromLeftWall = 0;
+      } else {
+        stain.distanceFromFrontWall = a;
+        stain.distanceFromRightWall = 0;
+      }
+      return { ...d, stains: [...d.stains, stain] };
+    });
+  }
+
+  /** Handle a chip dropped onto the top-view plan (scene item or bloodstain). */
   function handlePlanDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     const kind = e.dataTransfer.getData(DND_MIME) || e.dataTransfer.getData('text/plain');
@@ -243,7 +301,30 @@ export default function CaseView() {
       { width: TOPVIEW_W, height: TOPVIEW_H },
     );
     const rp = unproject(t, { x: px, y: py });
-    addObjectAt(kind, rp.x, rp.y);
+    if (kind === STAIN_DND) {
+      addStainAt(clampRange(rp.x, room.width), clampRange(rp.y, room.length));
+    } else {
+      addObjectAt(kind, rp.x, rp.y);
+    }
+  }
+
+  /** Handle a bloodstain chip dropped onto the wall elevation. */
+  function handleWallDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const kind = e.dataTransfer.getData(DND_MIME) || e.dataTransfer.getData('text/plain');
+    const room = draft?.room;
+    if (kind !== STAIN_DND || !room) return;
+    const extent = wall === 'north' || wall === 'south' ? room.width : room.length;
+    const t = fitTransform(
+      { width: extent, height: room.height },
+      { width: WALLVIEW_W, height: WALLVIEW_H },
+    );
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left + e.currentTarget.scrollLeft;
+    const py = e.clientY - rect.top + e.currentTarget.scrollTop;
+    const alongWall = (px - t.offsetX) / t.scale;
+    const z = room.height - (py - t.offsetY) / t.scale;
+    addWallStainAt(wall, clampRange(alongWall, extent), clampRange(z, room.height));
   }
 
   /** Reposition a scene item (furniture/body) from a drag on the plan. */
@@ -597,10 +678,22 @@ export default function CaseView() {
             {/* Drag-and-drop palette: drag a chip onto the plan to place it. */}
             <div className="mb-2">
               <div className="mb-1 text-[11px] text-slate-500">
-                Drag an item onto the plan to place it — then drag it around to position it near the
-                stains (placement is a reference, not to scale):
+                Drag onto the plan to place — a bloodstain, or a scene item you then drag into
+                position (placement is a reference, not to scale):
               </div>
               <div className="flex flex-wrap gap-1.5">
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(DND_MIME, STAIN_DND);
+                    e.dataTransfer.setData('text/plain', STAIN_DND);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="cursor-grab select-none rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs font-semibold text-red-300 hover:border-red-500 active:cursor-grabbing"
+                  title="Drag a bloodstain onto the plan"
+                >
+                  🩸 Bloodstain
+                </div>
                 {SCENE_PRESETS.map((preset) => (
                   <div
                     key={preset.kind}
@@ -662,7 +755,29 @@ export default function CaseView() {
                 <option value="west">West wall</option>
               </select>
             </div>
-            <div className="overflow-x-auto">
+            <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500">
+              <span>Drag a bloodstain onto the wall at its height:</span>
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DND_MIME, STAIN_DND);
+                  e.dataTransfer.setData('text/plain', STAIN_DND);
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+                className="cursor-grab select-none rounded border border-red-800 bg-red-950/40 px-2 py-1 font-semibold text-red-300 hover:border-red-500 active:cursor-grabbing"
+                title="Drag a bloodstain onto the wall"
+              >
+                🩸 Bloodstain
+              </div>
+            </div>
+            <div
+              className="inline-block overflow-x-auto"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={handleWallDrop}
+            >
               <WallElevation
                 stageRef={elevationRef}
                 room={draft.room}
@@ -670,8 +785,8 @@ export default function CaseView() {
                 analysis={analysis}
                 unit={roomUnit}
                 wall={wall}
-                width={820}
-                height={420}
+                width={WALLVIEW_W}
+                height={WALLVIEW_H}
               />
             </div>
           </Card>
