@@ -72,6 +72,7 @@ export function makeEmptyCase(ownerUid: string, caseNumber: string): Omit<Case, 
   return {
     caseNumber: caseNumber.trim(),
     unitSystem: 'metric',
+    roomUnit: 'ft',
     ownerUid,
     status: 'active',
     stains: [],

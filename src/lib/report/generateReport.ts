@@ -15,9 +15,10 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Case } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
-import { formatLength } from '@/lib/calculations';
+import { formatInUnit } from '@/lib/calculations';
 import { categoryCounts, patternLabel } from '@/lib/bpa/patterns';
 import { buildMethodology } from '@/lib/bpa/methodology';
+import { caseRoomUnit } from '@/lib/caseUnit';
 
 export interface ReportSketchImages {
   /** PNG data URL of the top-view sketch. */
@@ -39,7 +40,9 @@ export function generateReportDoc(
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const contentWidth = pageWidth - MARGIN * 2;
-  const system = kase.unitSystem;
+  const roomUnit = caseRoomUnit(kase);
+  /** Stain shape measurements are always millimeters. */
+  const mm = (v: number) => `${v.toFixed(1)} mm`;
 
   // ---- Title block ----
   let y = MARGIN;
@@ -68,7 +71,7 @@ export function generateReportDoc(
       ['Investigator', kase.investigator || '—'],
       ['Date', kase.date || '—'],
       ['Location', kase.location || '—'],
-      ['Units', system === 'metric' ? 'Metric (cm)' : 'Imperial (in)'],
+      ['Room / distance units', roomUnit],
       ['Victim', kase.victim?.name || '—'],
       ['Suspect', kase.suspect?.name || '—'],
     ],
@@ -97,8 +100,8 @@ export function generateReportDoc(
       s.stainId,
       s.surface,
       patternLabel(s.patternType),
-      formatLength(s.width, system),
-      formatLength(s.length, system),
+      mm(s.width),
+      mm(s.length),
       c && Number.isFinite(c.widthToLengthRatio) ? c.widthToLengthRatio.toFixed(3) : '—',
       c?.impactAngleDeg == null ? 'check' : `${c.impactAngleDeg.toFixed(1)}°`,
       typeof s.directionality === 'number' ? `${s.directionality.toFixed(0)}°` : '—',
@@ -154,7 +157,7 @@ export function generateReportDoc(
       ],
       [
         'Estimated area of origin height',
-        origin ? `${formatLength(origin.meanHeight, system)} ± ${formatLength(origin.heightStdDev, system)} (1σ)` : '—',
+        origin ? `${formatInUnit(origin.meanHeight, roomUnit)} ± ${formatInUnit(origin.heightStdDev, roomUnit)} (1σ)` : '—',
       ],
       ['Stains used in reconstruction', conv ? String(conv.lineCount) : '0'],
       ['Excluded stains', String(analysis.excludedStainIds.length)],
@@ -174,9 +177,9 @@ export function generateReportDoc(
       head: [['Stain', 'Horiz. dist', 'Height', 'String length', 'Azimuth', 'Elevation']],
       body: origin.strings.map((st) => [
         st.stainId,
-        formatLength(st.horizontalDistance, system),
-        formatLength(st.heightEstimate, system),
-        formatLength(st.stringLength, system),
+        formatInUnit(st.horizontalDistance, roomUnit),
+        formatInUnit(st.heightEstimate, roomUnit),
+        formatInUnit(st.stringLength, roomUnit),
         `${st.azimuthDeg.toFixed(0)}°`,
         `${st.elevationDeg.toFixed(1)}°`,
       ]),

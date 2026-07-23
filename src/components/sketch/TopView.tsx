@@ -13,9 +13,9 @@
 
 import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
-import type { Bloodstain, Point2D, Room, UnitSystem } from '@/types';
+import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
-import { formatLength } from '@/lib/calculations';
+import { formatInUnit } from '@/lib/calculations';
 import { sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import {
   fitTransform,
@@ -29,7 +29,7 @@ export interface TopViewProps {
   room: Room;
   stains: Bloodstain[];
   analysis: SceneAnalysis;
-  unitSystem: UnitSystem;
+  unit: LengthUnit;
   width?: number;
   height?: number;
   /** Grid spacing in mm; omit to hide the grid. */
@@ -42,7 +42,7 @@ export function TopView({
   room,
   stains,
   analysis,
-  unitSystem,
+  unit,
   width = 800,
   height = 600,
   gridMm = 500,
@@ -60,8 +60,8 @@ export function TopView({
         <FurnitureItems room={room} t={t} />
         <DirectionalityLines stains={stains} analysis={analysis} t={t} />
         <Stains stains={stains} analysis={analysis} t={t} />
-        <ConvergenceAndOrigin analysis={analysis} unitSystem={unitSystem} t={t} />
-        <ScaleBar t={t} unitSystem={unitSystem} canvasHeight={height} />
+        <ConvergenceAndOrigin analysis={analysis} unit={unit} t={t} />
+        <ScaleBar t={t} unit={unit} canvasHeight={height} />
         <NorthArrow canvasWidth={width} />
       </Layer>
     </Stage>
@@ -269,18 +269,18 @@ function Stains({
 
 function ConvergenceAndOrigin({
   analysis,
-  unitSystem,
+  unit,
   t,
 }: {
   analysis: SceneAnalysis;
-  unitSystem: UnitSystem;
+  unit: LengthUnit;
   t: ViewTransform;
 }) {
   const convergence = analysis.convergence?.point;
   if (!convergence) return null;
   const cp = project(t, convergence);
   const heightLabel = analysis.origin
-    ? `Origin ≈ ${formatLength(analysis.origin.meanHeight, unitSystem)} high`
+    ? `Origin ≈ ${formatInUnit(analysis.origin.meanHeight, unit)} high`
     : null;
 
   return (
@@ -307,11 +307,11 @@ function ConvergenceAndOrigin({
 
 function ScaleBar({
   t,
-  unitSystem,
+  unit,
   canvasHeight,
 }: {
   t: ViewTransform;
-  unitSystem: UnitSystem;
+  unit: LengthUnit;
   canvasHeight: number;
 }) {
   const barMm = niceScaleBarMm(t);
@@ -326,7 +326,7 @@ function ScaleBar({
       <Text
         x={x}
         y={y - 20}
-        text={formatLength(barMm, unitSystem, 0)}
+        text={formatInUnit(barMm, unit, 0)}
         fontSize={11}
         fontFamily={sketchFont}
         fill={sketchTheme.scaleBar}

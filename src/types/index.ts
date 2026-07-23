@@ -182,6 +182,11 @@ export interface Case {
   notes?: string;
 
   unitSystem: UnitSystem;
+  /**
+   * Display/entry unit for room dimensions and wall-relative distances.
+   * Independent of stain shape measurements, which are always in millimeters.
+   */
+  roomUnit?: LengthUnit;
   room?: Room;
   stains: Bloodstain[];
   photos?: CasePhoto[];

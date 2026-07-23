@@ -41,6 +41,15 @@ export function displayUnit(system: UnitSystem): LengthUnit {
 }
 
 /**
+ * Format a canonical (mm) value in an explicit length unit, e.g. "12.3 ft".
+ * Used where the display unit is chosen directly (room / distance units) rather
+ * than derived from a metric/imperial system.
+ */
+export function formatInUnit(valueMm: number, unit: LengthUnit, fractionDigits = 1): string {
+  return `${fromMm(valueMm, unit).toFixed(fractionDigits)} ${unit}`;
+}
+
+/**
  * Format a canonical (mm) value for display in the given system, rounding to a
  * sensible precision and appending the unit label. Used by the sketch labels
  * and report tables.

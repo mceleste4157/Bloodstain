@@ -6,17 +6,19 @@
  * instant a measurement changes — before anything is saved. An explicit Save
  * writes the whole case back to Firestore; a dirty indicator shows unsaved work.
  *
- * Measurements are entered in the case's display unit (cm or in) via
- * unit-aware inputs and stored canonically in millimeters. Live validation
+ * Stain shape measurements (width/length/diameter) are entered in millimeters;
+ * room dimensions and wall-relative distances are entered in the case's chosen
+ * room unit (ft/in/cm/m) and stored canonically in millimeters. Live validation
  * flags impossible or inconsistent measurements as they're typed.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type Konva from 'konva';
-import type { Bloodstain, Case, Room, StainCalculations, SurfaceType, UnitSystem } from '@/types';
-import { analyzeScene, axisDiscrepancy, displayUnit, formatLength } from '@/lib/calculations';
+import type { Bloodstain, Case, LengthUnit, Room, StainCalculations, SurfaceType } from '@/types';
+import { analyzeScene, axisDiscrepancy, formatInUnit } from '@/lib/calculations';
 import { PATTERN_GROUPS } from '@/lib/bpa/patterns';
+import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
 import { useCase } from '@/hooks/useCases';
 import { LengthInput } from '@/components/LengthInput';
@@ -76,7 +78,7 @@ export default function CaseView() {
     );
   }
 
-  const unit = displayUnit(draft.unitSystem);
+  const roomUnit = caseRoomUnit(draft);
 
   function patch(updates: Partial<Case>) {
     setDraft((d) => (d ? { ...d, ...updates } : d));
@@ -202,14 +204,18 @@ export default function CaseView() {
           <Field label="Location">
             <TextInput value={draft.location ?? ''} onChange={(e) => patch({ location: e.target.value })} />
           </Field>
-          <Field label="Units">
+          <Field label="Room / distance units" htmlFor="roomUnit" hint="Stain sizes are always in mm.">
             <select
-              value={draft.unitSystem}
-              onChange={(e) => patch({ unitSystem: e.target.value as UnitSystem })}
+              id="roomUnit"
+              value={roomUnit}
+              onChange={(e) => patch({ roomUnit: e.target.value as LengthUnit })}
               className="min-h-[44px] w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 text-sm text-slate-100 focus:border-brand-500 focus:outline-none"
             >
-              <option value="metric">Metric (cm)</option>
-              <option value="imperial">Imperial (in)</option>
+              {ROOM_UNIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="Victim">
@@ -240,27 +246,27 @@ export default function CaseView() {
       {/* Room */}
       <Card>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Room dimensions ({unit})
+          Room dimensions ({roomUnit})
         </h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label={`Width, left→right (${unit})`}>
+          <Field label={`Width, left→right (${roomUnit})`}>
             <LengthInput
               valueMm={draft.room?.width}
-              unitSystem={draft.unitSystem}
+              unit={roomUnit}
               onChangeMm={(v) => patch({ room: { ...roomOf(draft), width: v ?? 0 } })}
             />
           </Field>
-          <Field label={`Length, front→rear (${unit})`}>
+          <Field label={`Length, front→rear (${roomUnit})`}>
             <LengthInput
               valueMm={draft.room?.length}
-              unitSystem={draft.unitSystem}
+              unit={roomUnit}
               onChangeMm={(v) => patch({ room: { ...roomOf(draft), length: v ?? 0 } })}
             />
           </Field>
-          <Field label={`Height, floor→ceiling (${unit})`}>
+          <Field label={`Height, floor→ceiling (${roomUnit})`}>
             <LengthInput
               valueMm={draft.room?.height}
-              unitSystem={draft.unitSystem}
+              unit={roomUnit}
               onChangeMm={(v) => patch({ room: { ...roomOf(draft), height: v ?? 0 } })}
             />
           </Field>
@@ -286,7 +292,7 @@ export default function CaseView() {
               <StainEditor
                 key={stain.id}
                 stain={stain}
-                unitSystem={draft.unitSystem}
+                roomUnit={roomUnit}
                 room={draft.room}
                 calc={analysis?.stainResults[stain.id]}
                 onChange={(u) => patchStain(stain.id, u)}
@@ -315,10 +321,10 @@ export default function CaseView() {
           />
           <SummaryStat
             label="Est. origin height"
-            value={analysis.origin ? formatLength(analysis.origin.meanHeight, draft.unitSystem) : '—'}
+            value={analysis.origin ? formatInUnit(analysis.origin.meanHeight, roomUnit) : '—'}
             sub={
               analysis.origin
-                ? `± ${formatLength(analysis.origin.heightStdDev, draft.unitSystem)} (1σ)`
+                ? `± ${formatInUnit(analysis.origin.heightStdDev, roomUnit)} (1σ)`
                 : undefined
             }
           />
@@ -343,7 +349,7 @@ export default function CaseView() {
                 room={draft.room}
                 stains={draft.stains}
                 analysis={analysis}
-                unitSystem={draft.unitSystem}
+                unit={roomUnit}
                 width={820}
                 height={600}
               />
@@ -372,7 +378,7 @@ export default function CaseView() {
                 room={draft.room}
                 stains={draft.stains}
                 analysis={analysis}
-                unitSystem={draft.unitSystem}
+                unit={roomUnit}
                 wall={wall}
                 width={820}
                 height={420}
@@ -409,21 +415,24 @@ const DISCREPANCY_THRESHOLD_MM = 10;
  */
 function StainEditor({
   stain,
-  unitSystem,
+  roomUnit,
   room,
   calc,
   onChange,
   onRemove,
 }: {
   stain: Bloodstain;
-  unitSystem: UnitSystem;
+  roomUnit: LengthUnit;
   room?: Room;
   calc?: StainCalculations;
   onChange: (updates: Partial<Bloodstain>) => void;
   onRemove: () => void;
 }) {
-  const unit = displayUnit(unitSystem);
-  const warnings = stainWarnings(stain, room, unitSystem);
+  const warnings = stainWarnings(stain, room, roomUnit);
+
+  function confirmRemove() {
+    if (confirm(`Remove stain ${stain.stainId}? This cannot be undone.`)) onRemove();
+  }
 
   return (
     <div className="rounded-lg border border-surface-border p-3">
@@ -450,7 +459,7 @@ function StainEditor({
             )}
           </span>
           <button
-            onClick={onRemove}
+            onClick={confirmRemove}
             className="text-red-400 hover:text-red-300"
             aria-label={`Remove ${stain.stainId}`}
           >
@@ -491,71 +500,66 @@ function StainEditor({
             ))}
           </select>
         </Field>
-        <Field label={`Width (${unit})`}>
-          <LengthInput
-            valueMm={stain.width}
-            unitSystem={unitSystem}
-            onChangeMm={(v) => onChange({ width: v ?? 0 })}
-          />
-        </Field>
-        <Field label={`Length (${unit})`}>
-          <LengthInput
-            valueMm={stain.length}
-            unitSystem={unitSystem}
-            onChangeMm={(v) => onChange({ length: v ?? 0 })}
-          />
-        </Field>
-        <Field label={`Diameter (${unit})`}>
-          <LengthInput
-            valueMm={stain.diameter}
-            unitSystem={unitSystem}
-            onChangeMm={(v) => onChange({ diameter: v })}
-          />
-        </Field>
+        <MmField
+          label="Width (mm)"
+          value={stain.width}
+          onChange={(v) => onChange({ width: v ?? 0 })}
+        />
+        <MmField
+          label="Length (mm)"
+          value={stain.length}
+          onChange={(v) => onChange({ length: v ?? 0 })}
+        />
+        <MmField
+          label="Diameter (mm)"
+          value={stain.diameter}
+          onChange={(v) => onChange({ diameter: v })}
+        />
         <DegreeField
           label="Directionality (°)"
           value={stain.directionality}
           onChange={(v) => onChange({ directionality: v })}
+          hint="Bearing the tail points back toward the source. 0°=right, 90°=up, CCW."
         />
-        <Field label={`From left wall (${unit})`}>
+        <Field label={`From left wall (${roomUnit})`}>
           <LengthInput
             valueMm={stain.distanceFromLeftWall}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ distanceFromLeftWall: v })}
           />
         </Field>
-        <Field label={`From right wall (${unit})`}>
+        <Field label={`From right wall (${roomUnit})`}>
           <LengthInput
             valueMm={stain.distanceFromRightWall}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ distanceFromRightWall: v })}
           />
         </Field>
-        <Field label={`From front wall (${unit})`}>
+        <Field label={`From front wall (${roomUnit})`}>
           <LengthInput
             valueMm={stain.distanceFromFrontWall}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ distanceFromFrontWall: v })}
           />
         </Field>
-        <Field label={`From rear wall (${unit})`}>
+        <Field label={`From rear wall (${roomUnit})`}>
           <LengthInput
             valueMm={stain.distanceFromRearWall}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ distanceFromRearWall: v })}
           />
         </Field>
-        <Field label={`Height above floor (${unit})`}>
+        <Field label={`Height above floor (${roomUnit})`}>
           <LengthInput
             valueMm={stain.heightAboveFloor}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ heightAboveFloor: v })}
           />
         </Field>
-        <Field label={`From ceiling (${unit})`}>
+        <Field label={`From ceiling (${roomUnit})`}>
           <LengthInput
             valueMm={stain.distanceFromCeiling}
-            unitSystem={unitSystem}
+            unit={roomUnit}
             onChangeMm={(v) => onChange({ distanceFromCeiling: v })}
           />
         </Field>
@@ -594,7 +598,7 @@ function StainEditor({
  * and redundant-measurement mismatches (a near-wall + far-wall distance that
  * don't agree with the room span, catching transcription errors).
  */
-function stainWarnings(stain: Bloodstain, room: Room | undefined, system: UnitSystem): string[] {
+function stainWarnings(stain: Bloodstain, room: Room | undefined, unit: LengthUnit): string[] {
   const out: string[] = [];
 
   if (stain.width > 0 && stain.length > 0 && stain.width > stain.length) {
@@ -608,15 +612,15 @@ function stainWarnings(stain: Bloodstain, room: Room | undefined, system: UnitSy
   ];
   for (const [name, discrepancy] of checks) {
     if (discrepancy !== null && discrepancy > DISCREPANCY_THRESHOLD_MM) {
-      out.push(`${name} measurements disagree by ${formatLength(discrepancy, system)} — check the room size or the distances.`);
+      out.push(`${name} measurements disagree by ${formatInUnit(discrepancy, unit)} — check the room size or the distances.`);
     }
   }
 
   return out;
 }
 
-/** Degree input (kept in raw degrees; angles are not unit-converted). */
-function DegreeField({
+/** A plain millimeter number input (blank → undefined). Stain sizes are mm. */
+function MmField({
   label,
   value,
   onChange,
@@ -625,8 +629,23 @@ function DegreeField({
   value: number | undefined;
   onChange: (v: number | undefined) => void;
 }) {
+  return <DegreeField label={label} value={value} onChange={onChange} />;
+}
+
+/** Numeric input for raw values not subject to unit conversion (mm, degrees). */
+function DegreeField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number | undefined;
+  onChange: (v: number | undefined) => void;
+  hint?: string;
+}) {
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint}>
       <TextInput
         type="number"
         inputMode="decimal"

@@ -13,9 +13,9 @@
 
 import { Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
-import type { Bloodstain, Room, UnitSystem } from '@/types';
+import type { Bloodstain, LengthUnit, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
-import { formatLength } from '@/lib/calculations';
+import { formatInUnit } from '@/lib/calculations';
 import { sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import { fitTransform } from '@/lib/sketch/viewport';
 
@@ -25,7 +25,7 @@ export interface WallElevationProps {
   room: Room;
   stains: Bloodstain[];
   analysis: SceneAnalysis;
-  unitSystem: UnitSystem;
+  unit: LengthUnit;
   wall: WallId;
   width?: number;
   height?: number;
@@ -49,7 +49,7 @@ export function WallElevation({
   room,
   stains,
   analysis,
-  unitSystem,
+  unit,
   wall,
   width = 800,
   height = 480,
@@ -101,7 +101,7 @@ export function WallElevation({
             <Text
               x={px(0) + 6}
               y={py(analysis.origin.meanHeight) - 16}
-              text={`Area of origin ≈ ${formatLength(analysis.origin.meanHeight, unitSystem)}`}
+              text={`Area of origin ≈ ${formatInUnit(analysis.origin.meanHeight, unit)}`}
               fontSize={11}
               fontFamily={sketchFont}
               fill={sketchTheme.origin}
@@ -137,7 +137,7 @@ export function WallElevation({
               <Text
                 x={cx + 8}
                 y={cy - 6}
-                text={`${stain.stainId}  ${formatLength(z, unitSystem)}`}
+                text={`${stain.stainId}  ${formatInUnit(z, unit)}`}
                 fontSize={11}
                 fontStyle="bold"
                 fontFamily={sketchFont}
@@ -151,7 +151,7 @@ export function WallElevation({
         <Text
           x={px(0)}
           y={py(room.height) - 18}
-          text={`${formatLength(extent, unitSystem, 0)} wide × ${formatLength(room.height, unitSystem, 0)} high`}
+          text={`${formatInUnit(extent, unit, 0)} wide × ${formatInUnit(room.height, unit, 0)} high`}
           fontSize={11}
           fontFamily={sketchFont}
           fill={sketchTheme.text}
