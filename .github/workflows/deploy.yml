@@ -49,10 +49,17 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
 
-      - name: Deploy Hosting + Firestore rules & indexes
+      # Deploy Hosting only. The Firebase Admin SDK service account can publish
+      # Hosting but lacks the Service Usage permission a firestore rules/indexes
+      # deploy needs. Those were already deployed at project setup and change
+      # rarely; deploy them manually (`firebase deploy --only firestore`) from a
+      # machine logged in as an owner, or grant the service account the
+      # "Service Usage Consumer" + "Cloud Datastore Owner" roles to re-enable it
+      # here.
+      - name: Deploy Hosting
         run: |
           npx --yes firebase-tools@latest deploy \
-            --only hosting,firestore:rules,firestore:indexes \
+            --only hosting \
             --project bloodstain-c5531 \
             --non-interactive
 
