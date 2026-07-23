@@ -26,4 +26,18 @@ export const sketchTheme = {
   text: '#e2e8f0',
 } as const;
 
+/** Distinct hues to tell pattern groups apart in the sketches. */
+export const groupColors = [
+  '#f59e0b', // amber
+  '#22d3ee', // cyan
+  '#a78bfa', // violet
+  '#34d399', // emerald
+  '#fb7185', // rose
+  '#facc15', // yellow
+] as const;
+
+export function groupColor(index: number): string {
+  return groupColors[((index % groupColors.length) + groupColors.length) % groupColors.length];
+}
+
 export const sketchFont = 'ui-sans-serif, system-ui, sans-serif';

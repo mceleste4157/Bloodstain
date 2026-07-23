@@ -16,7 +16,7 @@ import type Konva from 'konva';
 import type { Bloodstain, LengthUnit, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatInUnit } from '@/lib/calculations';
-import { sketchFont, sketchTheme } from '@/lib/sketch/theme';
+import { groupColor, sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import { fitTransform } from '@/lib/sketch/viewport';
 
 export type WallId = 'north' | 'south' | 'east' | 'west';
@@ -89,25 +89,29 @@ export function WallElevation({
           fill={sketchTheme.text}
         />
 
-        {/* Area-of-origin height reference line */}
-        {analysis.origin ? (
-          <Group>
-            <Line
-              points={[px(0), py(analysis.origin.meanHeight), px(extent), py(analysis.origin.meanHeight)]}
-              stroke={sketchTheme.origin}
-              strokeWidth={1.5}
-              dash={[8, 5]}
-            />
-            <Text
-              x={px(0) + 6}
-              y={py(analysis.origin.meanHeight) - 16}
-              text={`Area of origin ≈ ${formatInUnit(analysis.origin.meanHeight, unit)}`}
-              fontSize={11}
-              fontFamily={sketchFont}
-              fill={sketchTheme.origin}
-            />
-          </Group>
-        ) : null}
+        {/* Area-of-origin height reference line, one per group with a result */}
+        {analysis.groups.map((group, gi) => {
+          if (!group.origin) return null;
+          const h = group.origin.meanHeight;
+          const color = groupColor(gi);
+          const multi = analysis.groups.filter((g) => g.origin).length > 1;
+          const label = multi
+            ? `${group.label} origin ≈ ${formatInUnit(h, unit)}`
+            : `Area of origin ≈ ${formatInUnit(h, unit)}`;
+          return (
+            <Group key={`origin-${group.key}`}>
+              <Line points={[px(0), py(h), px(extent), py(h)]} stroke={color} strokeWidth={1.5} dash={[8, 5]} />
+              <Text
+                x={px(0) + 6}
+                y={py(h) - 16}
+                text={label}
+                fontSize={11}
+                fontFamily={sketchFont}
+                fill={color}
+              />
+            </Group>
+          );
+        })}
 
         {/* Stains on this wall */}
         {wallStains.map((stain) => {

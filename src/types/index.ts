@@ -108,6 +108,13 @@ export interface Bloodstain {
   id: string;
   stainId: string; // human-facing label, e.g. "BS-001"
   surface: SurfaceType;
+  /**
+   * Pattern group this stain belongs to (e.g. "Pattern A"). Stains sharing a
+   * group are analyzed together for area of convergence and area of origin;
+   * different groups are reconstructed independently. Empty/undefined = the
+   * implicit "Ungrouped" set.
+   */
+  group?: string;
   /** Pattern classification value from the BPA taxonomy (see lib/bpa/patterns). */
   patternType?: string;
   description?: string;

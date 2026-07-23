@@ -5,4 +5,4 @@
  * Convention: bump by 0.01 on every publish (v0.11 → v0.12 → …). If the number
  * on the live site matches the one you expect, the new build went out.
  */
-export const APP_VERSION = '0.20';
+export const APP_VERSION = '0.21';

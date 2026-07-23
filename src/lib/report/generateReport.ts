@@ -98,6 +98,7 @@ export function generateReportDoc(
     const c = analysis.stainResults[s.id];
     return [
       s.stainId,
+      (s.group ?? '').trim() || 'Ungrouped',
       s.surface,
       patternLabel(s.patternType),
       mm(s.width),
@@ -113,8 +114,8 @@ export function generateReportDoc(
     theme: 'striped',
     headStyles: { fillColor: [30, 64, 175] },
     styles: { fontSize: 8, cellPadding: 3 },
-    head: [['Stain', 'Surface', 'Pattern', 'Width', 'Length', 'W:L', 'Impact ∠', 'Dir.']],
-    body: stainRows.length ? stainRows : [['—', '—', '—', '—', '—', '—', '—', '—']],
+    head: [['Stain', 'Group', 'Surface', 'Pattern', 'Width', 'Length', 'W:L', 'Impact ∠', 'Dir.']],
+    body: stainRows.length ? stainRows : [['—', '—', '—', '—', '—', '—', '—', '—', '—']],
     margin: { left: MARGIN, right: MARGIN },
   });
   y = afterTableY(doc);
@@ -141,48 +142,50 @@ export function generateReportDoc(
     y = afterTableY(doc);
   }
 
-  // ---- Calculated results ----
-  const conv = analysis.convergence;
-  const origin = analysis.origin;
+  // ---- Calculated results, per pattern group ----
+  const labelOf = new Map(kase.stains.map((s) => [s.id, s.stainId]));
   autoTable(doc, {
     startY: y + 12,
     theme: 'grid',
     headStyles: { fillColor: [30, 64, 175] },
-    styles: { fontSize: 10, cellPadding: 4 },
-    head: [['Calculated results', '']],
-    body: [
-      [
-        'Area of convergence',
-        conv ? `(${conv.point.x.toFixed(0)}, ${conv.point.y.toFixed(0)}) mm · RMS ${conv.rmsError.toFixed(0)} mm` : 'Insufficient data',
-      ],
-      [
-        'Estimated area of origin height',
-        origin ? `${formatInUnit(origin.meanHeight, roomUnit)} ± ${formatInUnit(origin.heightStdDev, roomUnit)} (1σ)` : '—',
-      ],
-      ['Stains used in reconstruction', conv ? String(conv.lineCount) : '0'],
-      ['Excluded stains', String(analysis.excludedStainIds.length)],
-    ],
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 200 } },
+    styles: { fontSize: 9, cellPadding: 3 },
+    head: [['Group', 'Area of convergence', 'Origin height (1σ)', 'Used', 'Excl.']],
+    body: analysis.groups.map((g) => [
+      g.label,
+      g.convergence
+        ? `(${g.convergence.point.x.toFixed(0)}, ${g.convergence.point.y.toFixed(0)}) mm · RMS ${g.convergence.rmsError.toFixed(0)} mm`
+        : 'Insufficient data',
+      g.origin
+        ? `${formatInUnit(g.origin.meanHeight, roomUnit)} ± ${formatInUnit(g.origin.heightStdDev, roomUnit)}`
+        : '—',
+      g.convergence ? String(g.convergence.lineCount) : '0',
+      String(g.excludedStainIds.length),
+    ]),
+    columnStyles: { 0: { fontStyle: 'bold' } },
     margin: { left: MARGIN, right: MARGIN },
   });
   y = afterTableY(doc);
 
-  // ---- Stringing detail (per-stain) ----
-  if (origin && origin.strings.length) {
+  // ---- Stringing detail (per-stain, grouped) ----
+  const stringRows = analysis.groups.flatMap((g) =>
+    (g.origin?.strings ?? []).map((st) => [
+      g.label,
+      labelOf.get(st.stainId) ?? st.stainId,
+      formatInUnit(st.horizontalDistance, roomUnit),
+      formatInUnit(st.heightEstimate, roomUnit),
+      formatInUnit(st.stringLength, roomUnit),
+      `${st.azimuthDeg.toFixed(0)}°`,
+      `${st.elevationDeg.toFixed(1)}°`,
+    ]),
+  );
+  if (stringRows.length) {
     autoTable(doc, {
       startY: y + 12,
       theme: 'striped',
       headStyles: { fillColor: [30, 64, 175] },
       styles: { fontSize: 9, cellPadding: 3 },
-      head: [['Stain', 'Horiz. dist', 'Height', 'String length', 'Azimuth', 'Elevation']],
-      body: origin.strings.map((st) => [
-        st.stainId,
-        formatInUnit(st.horizontalDistance, roomUnit),
-        formatInUnit(st.heightEstimate, roomUnit),
-        formatInUnit(st.stringLength, roomUnit),
-        `${st.azimuthDeg.toFixed(0)}°`,
-        `${st.elevationDeg.toFixed(1)}°`,
-      ]),
+      head: [['Group', 'Stain', 'Horiz. dist', 'Height', 'String length', 'Azimuth', 'Elevation']],
+      body: stringRows,
       margin: { left: MARGIN, right: MARGIN },
     });
     y = afterTableY(doc);

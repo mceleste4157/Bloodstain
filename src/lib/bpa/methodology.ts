@@ -12,7 +12,7 @@
  */
 
 import type { Bloodstain, Case, Room } from '@/types';
-import type { SceneAnalysis } from '@/lib/calculations';
+import type { GroupAnalysis, SceneAnalysis } from '@/lib/calculations';
 import { impactAngleDeg, resolveAxis, widthToLengthRatio } from '@/lib/calculations';
 
 export interface MethodologyLine {
@@ -63,8 +63,12 @@ export function buildMethodology(kase: Case, analysis: SceneAnalysis): Methodolo
     sections.push(stainSection(stain, kase.room));
   }
 
-  sections.push(convergenceSection(kase, analysis));
-  sections.push(originSection(analysis));
+  // Convergence + origin are reconstructed independently for each pattern group.
+  const stainLabel = new Map(kase.stains.map((s) => [s.id, s.stainId]));
+  for (const group of analysis.groups) {
+    sections.push(convergenceSection(group, analysis, stainLabel));
+    sections.push(originSection(group, stainLabel));
+  }
 
   return sections;
 }
@@ -111,18 +115,22 @@ function stainSection(stain: Bloodstain, room: Room | undefined): MethodologySec
   return { title: `Stain ${stain.stainId}`, lines };
 }
 
-function convergenceSection(kase: Case, analysis: SceneAnalysis): MethodologySection {
-  const conv = analysis.convergence;
+function convergenceSection(
+  group: GroupAnalysis,
+  analysis: SceneAnalysis,
+  stainLabel: Map<string, string>,
+): MethodologySection {
+  const conv = group.convergence;
   const lines: MethodologyLine[] = [];
 
-  const contributing = kase.stains.filter(
-    (s) => !analysis.excludedStainIds.includes(s.id) && analysis.stainResults[s.id]?.position,
-  );
-  for (const s of contributing) {
-    const p = analysis.stainResults[s.id].position!;
+  const excluded = new Set(group.excludedStainIds);
+  for (const id of group.memberStainIds) {
+    if (excluded.has(id)) continue;
+    const p = analysis.stainResults[id]?.position;
+    if (!p) continue;
     lines.push({
-      label: `${s.stainId} axis line`,
-      substitution: `through (${fmt(p.x, 0)}, ${fmt(p.y, 0)}) at bearing ${fmt(s.directionality ?? 0, 0)}°`,
+      label: `${stainLabel.get(id) ?? id} axis line`,
+      substitution: `through (${fmt(p.x, 0)}, ${fmt(p.y, 0)})`,
     });
   }
 
@@ -141,23 +149,23 @@ function convergenceSection(kase: Case, analysis: SceneAnalysis): MethodologySec
   }
 
   return {
-    title: 'Area of convergence',
+    title: `Area of convergence — ${group.label}`,
     intro:
-      'Each usable stain contributes a line through its top-view position along ' +
-      'its directionality. The convergence point minimizes the total squared ' +
-      'perpendicular distance to those lines (normal-equations least squares).',
+      'Each usable stain in this group contributes a line through its top-view ' +
+      'position along its directionality. The convergence point minimizes the ' +
+      'total squared perpendicular distance to those lines (least squares).',
     lines,
   };
 }
 
-function originSection(analysis: SceneAnalysis): MethodologySection {
-  const origin = analysis.origin;
+function originSection(group: GroupAnalysis, stainLabel: Map<string, string>): MethodologySection {
+  const origin = group.origin;
   const lines: MethodologyLine[] = [];
 
   if (origin) {
     for (const s of origin.strings) {
       lines.push({
-        label: `${s.stainId} height`,
+        label: `${stainLabel.get(s.stainId) ?? s.stainId} height`,
         formula: 'z = d · tan(α)',
         substitution: `${fmt(s.horizontalDistance, 0)} · tan(${fmt(s.elevationDeg, 1)}°)`,
         result: `${fmt(s.heightEstimate, 0)} mm  (string ${fmt(s.stringLength, 0)} mm, azimuth ${fmt(s.azimuthDeg, 0)}°)`,
@@ -178,11 +186,11 @@ function originSection(analysis: SceneAnalysis): MethodologySection {
   }
 
   return {
-    title: 'Area of origin (tangent method)',
+    title: `Area of origin (tangent method) — ${group.label}`,
     intro:
-      'For each stain a string runs from the stain back toward the source, ' +
-      'rising out of the plane at the impact angle. The height each string ' +
-      'implies is z = d · tan(α); the origin height is their mean.',
+      'For each stain in this group a string runs from the stain back toward ' +
+      'the source, rising at the impact angle. The height each string implies ' +
+      'is z = d · tan(α); the origin height is their mean.',
     lines,
   };
 }

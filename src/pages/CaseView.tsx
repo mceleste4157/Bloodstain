@@ -81,6 +81,9 @@ export default function CaseView() {
   }
 
   const roomUnit = caseRoomUnit(draft);
+  const groupNames = Array.from(
+    new Set(draft.stains.map((s) => (s.group ?? '').trim()).filter(Boolean)),
+  );
 
   function patch(updates: Partial<Case>) {
     setDraft((d) => (d ? { ...d, ...updates } : d));
@@ -98,12 +101,16 @@ export default function CaseView() {
 
   function addStain() {
     const n = draft!.stains.length + 1;
+    // Inherit the previous stain's group so a run of stains for one pattern all
+    // land together without re-typing the group each time.
+    const lastGroup = draft!.stains[draft!.stains.length - 1]?.group;
     // Start blank so derived values (ratio, impact angle) read "check" until the
     // investigator enters real measurements — no misleading placeholder angle.
     const stain: Bloodstain = {
       id: `stain-${Date.now()}`,
       stainId: `BS-${String(n).padStart(3, '0')}`,
       surface: 'floor',
+      group: lastGroup,
       width: 0,
       length: 0,
     };
@@ -310,8 +317,18 @@ export default function CaseView() {
           </Button>
         </div>
 
+        {/* Existing group names offered as autocomplete when assigning a group. */}
+        <datalist id="stain-groups">
+          {groupNames.map((g) => (
+            <option key={g} value={g} />
+          ))}
+        </datalist>
+
         {draft.stains.length === 0 ? (
-          <p className="text-sm text-slate-400">No stains documented yet.</p>
+          <p className="text-sm text-slate-400">
+            No stains documented yet. Add stains and assign them to the same group to reconstruct a
+            pattern's area of convergence and origin.
+          </p>
         ) : (
           <div className="space-y-3">
             {draft.stains.map((stain) => (
@@ -329,36 +346,53 @@ export default function CaseView() {
         )}
       </Card>
 
-      {/* Analysis summary */}
+      {/* Analysis summary — one card per pattern group */}
       {analysis ? (
-        <section className="grid gap-3 sm:grid-cols-3">
-          <SummaryStat
-            label="Area of convergence"
-            value={
-              analysis.convergence
-                ? `(${analysis.convergence.point.x.toFixed(0)}, ${analysis.convergence.point.y.toFixed(0)}) mm`
-                : 'Insufficient data'
-            }
-            sub={
-              analysis.convergence
-                ? `${analysis.convergence.lineCount} stains · RMS ${analysis.convergence.rmsError.toFixed(0)} mm`
-                : undefined
-            }
-          />
-          <SummaryStat
-            label="Est. origin height"
-            value={analysis.origin ? formatInUnit(analysis.origin.meanHeight, roomUnit) : '—'}
-            sub={
-              analysis.origin
-                ? `± ${formatInUnit(analysis.origin.heightStdDev, roomUnit)} (1σ)`
-                : undefined
-            }
-          />
-          <SummaryStat
-            label="Excluded stains"
-            value={String(analysis.excludedStainIds.length)}
-            sub={analysis.excludedStainIds.length ? 'Need angle + directionality' : 'none'}
-          />
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Reconstruction by pattern group
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {analysis.groups.map((group) => (
+              <Card key={group.key || 'ungrouped'}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-brand-300">{group.label}</span>
+                  <span className="text-xs text-slate-500">{group.memberStainIds.length} stains</span>
+                </div>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-slate-400">Area of convergence</dt>
+                    <dd className="tabular-nums">
+                      {group.convergence
+                        ? `(${group.convergence.point.x.toFixed(0)}, ${group.convergence.point.y.toFixed(0)}) mm`
+                        : 'Insufficient data'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-slate-400">Est. origin height</dt>
+                    <dd className="tabular-nums">
+                      {group.origin
+                        ? `${formatInUnit(group.origin.meanHeight, roomUnit)} ± ${formatInUnit(group.origin.heightStdDev, roomUnit)}`
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-slate-400">RMS / excluded</dt>
+                    <dd className="tabular-nums text-slate-400">
+                      {group.convergence ? `${group.convergence.rmsError.toFixed(0)} mm` : '—'} ·{' '}
+                      {group.excludedStainIds.length} excl.
+                    </dd>
+                  </div>
+                </dl>
+                {group.convergence === null && group.memberStainIds.length < 2 ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Add at least two stains (with impact angle + directionality) to this group to
+                    reconstruct convergence and origin.
+                  </p>
+                ) : null}
+              </Card>
+            ))}
+          </div>
         </section>
       ) : null}
 
@@ -450,15 +484,6 @@ function roomOf(kase: Case) {
   return kase.room ?? { width: 4000, length: 3000, height: 2600 };
 }
 
-function SummaryStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <Card>
-      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-brand-300">{value}</div>
-      {sub ? <div className="mt-0.5 text-xs text-slate-400">{sub}</div> : null}
-    </Card>
-  );
-}
 
 /** Discrepancy above which a redundant-measurement mismatch is flagged (mm). */
 const DISCREPANCY_THRESHOLD_MM = 10;
@@ -492,12 +517,22 @@ function StainEditor({
   return (
     <div className="rounded-lg border border-surface-border p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <input
-          value={stain.stainId}
-          onChange={(e) => onChange({ stainId: e.target.value })}
-          className="w-28 rounded bg-surface px-2 py-1 text-sm font-semibold text-brand-300 focus:outline-none"
-          aria-label="Stain ID"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            value={stain.stainId}
+            onChange={(e) => onChange({ stainId: e.target.value })}
+            className="w-24 rounded bg-surface px-2 py-1 text-sm font-semibold text-brand-300 focus:outline-none"
+            aria-label="Stain ID"
+          />
+          <input
+            value={stain.group ?? ''}
+            list="stain-groups"
+            onChange={(e) => onChange({ group: e.target.value || undefined })}
+            placeholder="Group / pattern"
+            className="w-36 rounded bg-surface px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none"
+            aria-label="Pattern group"
+          />
+        </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span>
             W:L{' '}

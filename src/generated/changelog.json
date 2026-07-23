@@ -1,5 +1,11 @@
 [
   {
+    "hash": "fee1e52",
+    "date": "2026-07-23T02:13:30+00:00",
+    "version": "0.20",
+    "subject": "Add What's New changelog page; start new stains blank"
+  },
+  {
     "hash": "cc4263e",
     "date": "2026-07-23T02:08:07+00:00",
     "version": "0.19",

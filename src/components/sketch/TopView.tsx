@@ -16,7 +16,7 @@ import type Konva from 'konva';
 import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { formatInUnit } from '@/lib/calculations';
-import { sketchFont, sketchTheme } from '@/lib/sketch/theme';
+import { groupColor, sketchFont, sketchTheme } from '@/lib/sketch/theme';
 import {
   fitTransform,
   niceScaleBarMm,
@@ -69,7 +69,7 @@ export function TopView({
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
         <FurnitureItems room={room} t={t} />
-        <DirectionalityLines stains={stains} analysis={analysis} t={t} />
+        <DirectionalityLines analysis={analysis} t={t} />
         <Stains
           stains={stains}
           analysis={analysis}
@@ -205,32 +205,37 @@ function FurnitureItems({ room, t }: { room: Room; t: ViewTransform }) {
 }
 
 function DirectionalityLines({
-  stains,
   analysis,
   t,
 }: {
-  stains: Bloodstain[];
   analysis: SceneAnalysis;
   t: ViewTransform;
 }) {
-  const convergence = analysis.convergence?.point;
-  if (!convergence) return null;
-  const cp = project(t, convergence);
-
   return (
     <Group>
-      {stains.map((stain) => {
-        const pos = analysis.stainResults[stain.id]?.position;
-        if (!pos || analysis.excludedStainIds.includes(stain.id)) return null;
-        const sp = project(t, { x: pos.x, y: pos.y });
+      {analysis.groups.map((group, gi) => {
+        if (!group.convergence) return null;
+        const cp = project(t, group.convergence.point);
+        const color = groupColor(gi);
+        const excluded = new Set(group.excludedStainIds);
         return (
-          <Line
-            key={`dir-${stain.id}`}
-            points={[sp.x, sp.y, cp.x, cp.y]}
-            stroke={sketchTheme.directionality}
-            strokeWidth={1.5}
-            dash={[6, 4]}
-          />
+          <Group key={`grp-lines-${group.key}`}>
+            {group.memberStainIds.map((id) => {
+              const pos = analysis.stainResults[id]?.position;
+              if (!pos || excluded.has(id)) return null;
+              const sp = project(t, { x: pos.x, y: pos.y });
+              return (
+                <Line
+                  key={`dir-${id}`}
+                  points={[sp.x, sp.y, cp.x, cp.y]}
+                  stroke={color}
+                  opacity={0.7}
+                  strokeWidth={1.5}
+                  dash={[6, 4]}
+                />
+              );
+            })}
+          </Group>
         );
       })}
     </Group>
@@ -323,31 +328,38 @@ function ConvergenceAndOrigin({
   unit: LengthUnit;
   t: ViewTransform;
 }) {
-  const convergence = analysis.convergence?.point;
-  if (!convergence) return null;
-  const cp = project(t, convergence);
-  const heightLabel = analysis.origin
-    ? `Origin ≈ ${formatInUnit(analysis.origin.meanHeight, unit)} high`
-    : null;
-
+  const multi = analysis.groups.filter((g) => g.convergence).length > 1;
   return (
     <Group>
-      {/* Area of convergence crosshair */}
-      <Line points={[cp.x - 10, cp.y, cp.x + 10, cp.y]} stroke={sketchTheme.convergence} strokeWidth={2} />
-      <Line points={[cp.x, cp.y - 10, cp.x, cp.y + 10]} stroke={sketchTheme.convergence} strokeWidth={2} />
-      <Circle x={cp.x} y={cp.y} radius={13} stroke={sketchTheme.convergence} strokeWidth={1.5} dash={[3, 3]} />
-      {/* Area of origin ring (its x,y projects onto the convergence point) */}
-      {analysis.origin ? (
-        <Circle x={cp.x} y={cp.y} radius={18} stroke={sketchTheme.origin} strokeWidth={1.5} />
-      ) : null}
-      <Text
-        x={cp.x + 16}
-        y={cp.y + 12}
-        text={heightLabel ? `Area of convergence\n${heightLabel}` : 'Area of convergence'}
-        fontSize={11}
-        fontFamily={sketchFont}
-        fill={sketchTheme.text}
-      />
+      {analysis.groups.map((group, gi) => {
+        if (!group.convergence) return null;
+        const cp = project(t, group.convergence.point);
+        const color = groupColor(gi);
+        const heightLabel = group.origin
+          ? `Origin ≈ ${formatInUnit(group.origin.meanHeight, unit)} high`
+          : null;
+        // Prefix the label with the group name only when more than one group
+        // has a reconstruction, to keep single-pattern scenes uncluttered.
+        const title = multi ? `${group.label}: Area of convergence` : 'Area of convergence';
+        return (
+          <Group key={`conv-${group.key}`}>
+            <Line points={[cp.x - 10, cp.y, cp.x + 10, cp.y]} stroke={color} strokeWidth={2} />
+            <Line points={[cp.x, cp.y - 10, cp.x, cp.y + 10]} stroke={color} strokeWidth={2} />
+            <Circle x={cp.x} y={cp.y} radius={13} stroke={color} strokeWidth={1.5} dash={[3, 3]} />
+            {group.origin ? (
+              <Circle x={cp.x} y={cp.y} radius={18} stroke={sketchTheme.origin} strokeWidth={1.5} />
+            ) : null}
+            <Text
+              x={cp.x + 16}
+              y={cp.y + 12}
+              text={heightLabel ? `${title}\n${heightLabel}` : title}
+              fontSize={11}
+              fontFamily={sketchFont}
+              fill={sketchTheme.text}
+            />
+          </Group>
+        );
+      })}
     </Group>
   );
 }

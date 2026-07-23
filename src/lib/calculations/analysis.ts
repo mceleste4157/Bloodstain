@@ -1,73 +1,117 @@
 /**
  * Scene-level analysis orchestration.
  *
- * Ties the primitives together for a whole case: computes each stain's derived
- * values, assembles the directionality lines on the top-view (floor) plane,
- * solves for the area of convergence, and reconstructs the 3D area of origin.
+ * Ties the primitives together for a whole case. Stains are partitioned into
+ * pattern **groups** (via `Bloodstain.group`); each group is reconstructed
+ * independently — its own area of convergence and area of origin — because
+ * mixing stains from unrelated impact patterns would produce a meaningless
+ * "origin". Per-stain derived values are computed for every stain regardless of
+ * grouping.
  *
- * This is the single function the UI, sketch generator, and PDF report all call
- * to get a consistent, fully-derived picture of a scene. It performs no I/O and
+ * This is the single function the UI, sketch generator, and PDF report call to
+ * get a consistent, fully-derived picture of a scene. It performs no I/O and
  * mutates nothing, so it is trivially testable and safe to run on every edit.
  */
 
-import type { Bloodstain, Point3D, Room } from '@/types';
+import type { Bloodstain, Room, StainCalculations } from '@/types';
 import { impactAngleDeg } from './angle';
 import { areaOfConvergence, type ConvergenceResult, type DirectionalityLine } from './convergence';
 import { areaOfOrigin, type AreaOfOriginResult, type OriginInputStain } from './origin';
 import { calculateStain } from './stain';
-import type { StainCalculations } from '@/types';
+
+/** The reconstruction results for a single pattern group. */
+export interface GroupAnalysis {
+  /** Group key ('' for the implicit ungrouped set). */
+  key: string;
+  /** Display label ("Ungrouped" when the key is empty). */
+  label: string;
+  /** Ids of every stain assigned to this group. */
+  memberStainIds: string[];
+  /** Area of convergence for this group, or null if not derivable. */
+  convergence: ConvergenceResult | null;
+  /** Reconstructed 3D area of origin for this group, or null. */
+  origin: AreaOfOriginResult | null;
+  /** Members that couldn't contribute (missing angle or directionality). */
+  excludedStainIds: string[];
+}
 
 export interface SceneAnalysis {
   /** Per-stain derived values, keyed by stain id. */
   stainResults: Record<string, StainCalculations>;
-  /** Area of convergence on the top-view plane, or null if not derivable. */
-  convergence: ConvergenceResult | null;
-  /** Reconstructed 3D area of origin, or null if not derivable. */
-  origin: AreaOfOriginResult | null;
-  /** Stains that could not contribute (missing angle or directionality). */
-  excludedStainIds: string[];
+  /** One entry per pattern group present in the scene. */
+  groups: GroupAnalysis[];
+}
+
+/** Normalize a stain's group key (trimmed; empty means ungrouped). */
+export function groupKeyOf(stain: Bloodstain): string {
+  return (stain.group ?? '').trim();
+}
+
+function groupLabel(key: string): string {
+  return key === '' ? 'Ungrouped' : key;
 }
 
 /**
- * Analyze an entire scene.
+ * Analyze an entire scene, grouped by pattern.
  *
- * A stain contributes to the convergence/origin reconstruction only when it has
- * both a resolvable top-view position and both a valid impact angle and a
- * directionality bearing. Stains missing any of these are still given per-stain
- * results but are reported in `excludedStainIds` so the UI can explain why the
- * reconstruction used fewer stains than were documented.
+ * A stain contributes to its group's convergence/origin reconstruction only
+ * when it has a resolvable top-view position, a valid impact angle, and a
+ * directionality bearing. Non-contributing members are reported per group in
+ * `excludedStainIds`.
  */
 export function analyzeScene(stains: Bloodstain[], room?: Room): SceneAnalysis {
   const stainResults: Record<string, StainCalculations> = {};
-  const lines: DirectionalityLine[] = [];
-  const originInputs: OriginInputStain[] = [];
-  const excludedStainIds: string[] = [];
 
+  // Partition stains by group, preserving first-seen order.
+  const order: string[] = [];
+  const byGroup = new Map<string, Bloodstain[]>();
   for (const stain of stains) {
-    const result = calculateStain(stain, room);
-    stainResults[stain.id] = result;
-
-    const angle = impactAngleDeg(stain.width, stain.length);
-    const position = result.position;
-    const hasBearing = typeof stain.directionality === 'number';
-
-    if (position && angle !== null && hasBearing) {
-      // Top-view plane uses (x, y); height (z) is recovered by the origin step.
-      const planePosition = { x: position.x, y: position.y };
-      lines.push({ position: planePosition, bearingDeg: stain.directionality as number });
-      originInputs.push({ id: stain.id, position: planePosition, impactAngleDeg: angle });
-    } else {
-      excludedStainIds.push(stain.id);
+    stainResults[stain.id] = calculateStain(stain, room);
+    const key = groupKeyOf(stain);
+    if (!byGroup.has(key)) {
+      byGroup.set(key, []);
+      order.push(key);
     }
+    byGroup.get(key)!.push(stain);
   }
 
-  const convergence = areaOfConvergence(lines);
-  const origin = convergence ? areaOfOrigin(originInputs, convergence.point) : null;
+  const groups: GroupAnalysis[] = order.map((key) => {
+    const members = byGroup.get(key)!;
+    const lines: DirectionalityLine[] = [];
+    const originInputs: OriginInputStain[] = [];
+    const excludedStainIds: string[] = [];
 
-  return { stainResults, convergence, origin, excludedStainIds };
+    for (const stain of members) {
+      const angle = impactAngleDeg(stain.width, stain.length);
+      const position = stainResults[stain.id].position;
+      const hasBearing = typeof stain.directionality === 'number';
+
+      if (position && angle !== null && hasBearing) {
+        const planePosition = { x: position.x, y: position.y };
+        lines.push({ position: planePosition, bearingDeg: stain.directionality as number });
+        originInputs.push({ id: stain.id, position: planePosition, impactAngleDeg: angle });
+      } else {
+        excludedStainIds.push(stain.id);
+      }
+    }
+
+    const convergence = areaOfConvergence(lines);
+    const origin = convergence ? areaOfOrigin(originInputs, convergence.point) : null;
+
+    return {
+      key,
+      label: groupLabel(key),
+      memberStainIds: members.map((s) => s.id),
+      convergence,
+      origin,
+      excludedStainIds,
+    };
+  });
+
+  return { stainResults, groups };
 }
 
-/** Convenience: the 3D area-of-origin point, or null. */
-export function originPoint(analysis: SceneAnalysis): Point3D | null {
-  return analysis.origin?.origin ?? null;
+/** All group keys → analysis, for quick lookup by a stain's group. */
+export function groupOf(analysis: SceneAnalysis, key: string): GroupAnalysis | undefined {
+  return analysis.groups.find((g) => g.key === key);
 }

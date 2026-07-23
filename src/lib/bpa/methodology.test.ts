@@ -7,11 +7,13 @@ describe('buildMethodology', () => {
   const analysis = analyzeScene(sampleCase.stains, sampleCase.room);
   const sections = buildMethodology(sampleCase, analysis);
 
-  it('includes conventions, every stain, convergence, and origin', () => {
+  it('includes conventions, every stain, and per-group convergence + origin', () => {
     const titles = sections.map((s) => s.title);
     expect(titles).toContain('Conventions');
-    expect(titles).toContain('Area of convergence');
-    expect(titles).toContain('Area of origin (tangent method)');
+    expect(titles.some((t) => t.startsWith('Area of convergence'))).toBe(true);
+    expect(titles.some((t) => t.startsWith('Area of origin (tangent method)'))).toBe(true);
+    // The sample has an "Impact A" group that reconstructs.
+    expect(titles).toContain('Area of convergence — Impact A');
     for (const stain of sampleCase.stains) {
       expect(titles).toContain(`Stain ${stain.stainId}`);
     }
@@ -25,7 +27,7 @@ describe('buildMethodology', () => {
   });
 
   it('reports the least-squares convergence result for the sample scene', () => {
-    const conv = sections.find((s) => s.title === 'Area of convergence')!;
+    const conv = sections.find((s) => s.title === 'Area of convergence — Impact A')!;
     const resultLine = conv.lines.find((l) => l.result && l.result.includes('mm'));
     expect(resultLine).toBeTruthy();
   });
