@@ -19,7 +19,7 @@ import { Grid, Line, OrbitControls } from '@react-three/drei';
 import type { Bloodstain, Point3D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
 import { groupColor, sketchTheme } from '@/lib/sketch/theme';
-import { sceneObjectColor, sceneObjectHeight } from '@/lib/bpa/sceneObjects';
+import { SceneObjectMesh, Walls } from './scene3dParts';
 
 const S = 0.001; // mm → m
 
@@ -51,6 +51,11 @@ export default function Scene3D({ room, stains, analysis, height = 460 }: Scene3
           <ambientLight intensity={0.7} />
           <directionalLight position={[w * 2, h * 3, l * 2]} intensity={0.8} />
 
+          {/* Floor slab */}
+          <mesh position={[w / 2, -0.005, l / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[w, l]} />
+            <meshStandardMaterial color="#0f1a2e" />
+          </mesh>
           {/* Floor grid for spatial reference */}
           <Grid
             position={[w / 2, 0, l / 2]}
@@ -60,31 +65,13 @@ export default function Scene3D({ room, stains, analysis, height = 460 }: Scene3
             infiniteGrid={false}
           />
 
-          {/* Room bounding box (wireframe) */}
-          <mesh position={center}>
-            <boxGeometry args={[w, h, l]} />
-            <meshBasicMaterial color={sketchTheme.wall} wireframe transparent opacity={0.25} />
-          </mesh>
+          {/* Solid walls with door openings + window panels */}
+          <Walls room={room} />
 
-          {/* Scene objects (furniture, body, fixtures) as floor-standing boxes */}
-          {(room.furniture ?? []).map((f) => {
-            const oh = sceneObjectHeight(f.kind) * S;
-            const fw = f.width * S;
-            const fd = f.depth * S;
-            // Box centered on the footprint, resting on the floor.
-            const cx = (f.position.x + f.width / 2) * S;
-            const cz = (f.position.y + f.depth / 2) * S;
-            return (
-              <mesh key={f.id} position={[cx, oh / 2, cz]}>
-                <boxGeometry args={[fw, oh, fd]} />
-                <meshStandardMaterial
-                  color={sceneObjectColor(f.kind)}
-                  transparent
-                  opacity={f.kind === 'body' ? 0.85 : 0.5}
-                />
-              </mesh>
-            );
-          })}
+          {/* Recognizable scene-object models (furniture, body, fixtures) */}
+          {(room.furniture ?? []).map((f) => (
+            <SceneObjectMesh key={f.id} obj={f} />
+          ))}
 
           {/* Stains */}
           {stains.map((stain) => {

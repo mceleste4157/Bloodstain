@@ -1,5 +1,11 @@
 [
   {
+    "hash": "f3b16e0",
+    "date": "2026-07-23T15:19:02+00:00",
+    "version": "0.28",
+    "subject": "Add scene-object palette: bed, body, chair, kitchen, etc."
+  },
+  {
     "hash": "902cbc1",
     "date": "2026-07-23T15:11:49+00:00",
     "version": "0.27",
