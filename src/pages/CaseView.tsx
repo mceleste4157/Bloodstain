@@ -74,6 +74,7 @@ export default function CaseView() {
   const [wall, setWall] = useState<WallId>('north');
   const [snap, setSnap] = useState(true);
   const [show3D, setShow3D] = useState(false);
+  const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
 
   // Konva stage refs, used to rasterize the sketches into the PDF report.
   const topViewRef = useRef<Konva.Stage>(null);
@@ -101,6 +102,21 @@ export default function CaseView() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Delete/Backspace removes the selected scene item (unless typing in a field).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (!selectedFurnitureId) return;
+      const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      e.preventDefault();
+      removeFurniture(selectedFurnitureId);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFurnitureId]);
 
   const analysis = useMemo(
     () => (draft ? analyzeScene(draft.stains, draft.room) : null),
@@ -351,6 +367,16 @@ export default function CaseView() {
         },
       };
     });
+  }
+
+  /** Remove a scene item from the room. */
+  function removeFurniture(objId: string) {
+    commit((d) =>
+      d.room?.furniture
+        ? { ...d, room: { ...d.room, furniture: d.room.furniture.filter((f) => f.id !== objId) } }
+        : d,
+    );
+    setSelectedFurnitureId((cur) => (cur === objId ? null : cur));
   }
 
   /** Reposition a wall stain by dragging it on the elevation. */
@@ -695,7 +721,15 @@ export default function CaseView() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                 Top view (floor plan)
               </h2>
-              <div className="flex items-center gap-4 text-xs text-slate-300">
+              <div className="flex items-center gap-3 text-xs text-slate-300">
+                {selectedFurnitureId ? (
+                  <button
+                    onClick={() => removeFurniture(selectedFurnitureId)}
+                    className="rounded border border-red-800 px-2 py-1 text-red-300 hover:border-red-500"
+                  >
+                    Delete selected item
+                  </button>
+                ) : null}
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
                   Snap to grid
@@ -758,6 +792,8 @@ export default function CaseView() {
                 onStainMove={moveStain}
                 onFurnitureMove={moveFurniture}
                 onFurnitureTransform={transformFurniture}
+                selectedFurnitureId={selectedFurnitureId}
+                onSelectFurniture={setSelectedFurnitureId}
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">

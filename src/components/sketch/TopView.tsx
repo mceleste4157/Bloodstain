@@ -11,7 +11,7 @@
  *   stains + labels → convergence & area-of-origin markers → scale bar + north.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
@@ -53,6 +53,10 @@ export interface TopViewProps {
     id: string,
     next: { x: number; y: number; width: number; depth: number; rotation: number },
   ) => void;
+  /** Id of the currently-selected scene item (controlled). */
+  selectedFurnitureId?: string | null;
+  /** Called when the scene-item selection changes (click item / empty space). */
+  onSelectFurniture?: (id: string | null) => void;
 }
 
 export interface FurnitureTransform {
@@ -76,10 +80,11 @@ export function TopView({
   onStainMove,
   onFurnitureMove,
   onFurnitureTransform,
+  selectedFurnitureId = null,
+  onSelectFurniture,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
     <Stage
@@ -88,10 +93,10 @@ export function TopView({
       height={height}
       style={{ background: sketchTheme.background }}
       onMouseDown={(e) => {
-        if (e.target === e.target.getStage()) setSelectedId(null);
+        if (e.target === e.target.getStage()) onSelectFurniture?.(null);
       }}
       onTouchStart={(e) => {
-        if (e.target === e.target.getStage()) setSelectedId(null);
+        if (e.target === e.target.getStage()) onSelectFurniture?.(null);
       }}
     >
       {/* Always listening so scene items can be dragged without an edit mode. */}
@@ -105,8 +110,8 @@ export function TopView({
           snapMm={snapMm}
           onFurnitureMove={onFurnitureMove}
           onFurnitureTransform={onFurnitureTransform}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+          selectedId={selectedFurnitureId}
+          onSelect={onSelectFurniture ?? (() => {})}
         />
         <DirectionalityLines analysis={analysis} t={t} />
         <Stains
