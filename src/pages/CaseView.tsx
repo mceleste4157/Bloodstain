@@ -74,10 +74,10 @@ export default function CaseView() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [wall, setWall] = useState<WallId>('north');
   const [snap, setSnap] = useState(true);
-  const [show3D, setShow3D] = useState(false);
   const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
   const [uploadingPlan, setUploadingPlan] = useState(false);
   const floorplanInputRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab] = useState<'details' | 'diagram' | 'stains' | 'photos' | '3d'>('details');
 
   // Konva stage refs, used to rasterize the sketches into the PDF report.
   const topViewRef = useRef<Konva.Stage>(null);
@@ -529,6 +529,34 @@ export default function CaseView() {
         </div>
       </div>
 
+      {/* Tab navigation */}
+      <div className="flex flex-wrap gap-1 border-b border-surface-border">
+        {(
+          [
+            ['details', 'Details'],
+            ['diagram', 'Diagram'],
+            ['stains', `Stains (${draft.stains.length})`],
+            ['photos', `Photos (${draft.photos?.length ?? 0})`],
+            ['3d', '3D'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+              tab === key
+                ? 'border-brand-500 font-semibold text-brand-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Details tab: case info + room setup */}
+      {tab === 'details' ? (
+        <>
       {/* Case details */}
       <Card>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -689,7 +717,11 @@ export default function CaseView() {
         </div>
       </Card>
 
-      {/* Stains */}
+        </>
+      ) : null}
+
+      {/* Stains tab */}
+      {tab === 'stains' ? (
       <Card>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -729,7 +761,10 @@ export default function CaseView() {
         )}
       </Card>
 
-      {/* Evidence photos */}
+      ) : null}
+
+      {/* Photos tab */}
+      {tab === 'photos' ? (
       <Card>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Evidence photos
@@ -742,8 +777,11 @@ export default function CaseView() {
           onChange={(photos) => patch({ photos })}
         />
       </Card>
+      ) : null}
 
-      {/* Analysis summary — one card per pattern group */}
+      {/* Diagram tab: reconstruction summary + 2D sketches */}
+      {tab === 'diagram' ? (
+        <div className="space-y-6">
       {analysis ? (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -936,47 +974,46 @@ export default function CaseView() {
               />
             </div>
           </Card>
-
-          <Card>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-                3D scene
-              </h2>
-              <Button variant="secondary" onClick={() => setShow3D((v) => !v)}>
-                {show3D ? 'Hide 3D' : 'Show 3D scene'}
-              </Button>
-            </div>
-            {show3D ? (
-              <ErrorBoundary
-                fallback={
-                  <p className="text-sm text-red-400">
-                    The 3D view couldn't be displayed (WebGL may be unavailable on this device). The
-                    2D sketches above show the same reconstruction.
-                  </p>
-                }
-              >
-                <Suspense
-                  fallback={
-                    <div className="flex h-[460px] items-center justify-center">
-                      <Spinner label="Loading 3D…" />
-                    </div>
-                  }
-                >
-                  <Scene3D room={draft.room} stains={draft.stains} analysis={analysis} />
-                </Suspense>
-              </ErrorBoundary>
-            ) : (
-              <p className="text-sm text-slate-400">
-                An interactive 3D view of the room, stains, and each group's trajectory lines and
-                area of origin. Drag to orbit, scroll to zoom.
-              </p>
-            )}
-          </Card>
         </>
       ) : null}
+        </div>
+      ) : null}
 
-      {/* Activity log (chain of custody) */}
-      {auditEntries.length > 0 ? (
+      {/* 3D tab */}
+      {tab === '3d' ? (
+        !draft.room || !analysis ? (
+          <Card>
+            <p className="text-sm text-slate-400">Add a room and stains to see the 3D scene.</p>
+          </Card>
+        ) : (
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+              3D scene — drag to orbit, scroll to zoom
+            </h2>
+            <ErrorBoundary
+              fallback={
+                <p className="text-sm text-red-400">
+                  The 3D view couldn't be displayed (WebGL may be unavailable on this device). The
+                  2D diagram shows the same reconstruction.
+                </p>
+              }
+            >
+              <Suspense
+                fallback={
+                  <div className="flex h-[460px] items-center justify-center">
+                    <Spinner label="Loading 3D…" />
+                  </div>
+                }
+              >
+                <Scene3D room={draft.room} stains={draft.stains} analysis={analysis} />
+              </Suspense>
+            </ErrorBoundary>
+          </Card>
+        )
+      ) : null}
+
+      {/* Activity log (chain of custody) — shown on the Details tab */}
+      {tab === 'details' && auditEntries.length > 0 ? (
         <Card>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
             Activity log
@@ -1179,49 +1216,59 @@ function StainEditor({
           onChange={(v) => onChange({ directionality: v })}
           hint="Bearing the tail points back toward the source. 0°=right, 90°=up, CCW."
         />
-        <Field label={`From left wall (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.distanceFromLeftWall}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ distanceFromLeftWall: v })}
-          />
-        </Field>
-        <Field label={`From right wall (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.distanceFromRightWall}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ distanceFromRightWall: v })}
-          />
-        </Field>
-        <Field label={`From front wall (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.distanceFromFrontWall}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ distanceFromFrontWall: v })}
-          />
-        </Field>
-        <Field label={`From rear wall (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.distanceFromRearWall}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ distanceFromRearWall: v })}
-          />
-        </Field>
-        <Field label={`Height above floor (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.heightAboveFloor}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ heightAboveFloor: v })}
-          />
-        </Field>
-        <Field label={`From ceiling (${roomUnit})`}>
-          <LengthInput
-            valueMm={stain.distanceFromCeiling}
-            unit={roomUnit}
-            onChangeMm={(v) => onChange({ distanceFromCeiling: v })}
-          />
-        </Field>
       </div>
+
+      {/* Exact wall-distance measurements are optional — position is usually set
+          by dragging the stain on the diagram. Collapsed to reduce clutter. */}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-200">
+          Precise position (optional) — distances from walls &amp; height
+        </summary>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <Field label={`From left wall (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.distanceFromLeftWall}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ distanceFromLeftWall: v })}
+            />
+          </Field>
+          <Field label={`From right wall (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.distanceFromRightWall}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ distanceFromRightWall: v })}
+            />
+          </Field>
+          <Field label={`From front wall (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.distanceFromFrontWall}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ distanceFromFrontWall: v })}
+            />
+          </Field>
+          <Field label={`From rear wall (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.distanceFromRearWall}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ distanceFromRearWall: v })}
+            />
+          </Field>
+          <Field label={`Height above floor (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.heightAboveFloor}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ heightAboveFloor: v })}
+            />
+          </Field>
+          <Field label={`From ceiling (${roomUnit})`}>
+            <LengthInput
+              valueMm={stain.distanceFromCeiling}
+              unit={roomUnit}
+              onChangeMm={(v) => onChange({ distanceFromCeiling: v })}
+            />
+          </Field>
+        </div>
+      </details>
 
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Field label="Description">
