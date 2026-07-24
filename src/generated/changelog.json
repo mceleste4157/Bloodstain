@@ -1,5 +1,11 @@
 [
   {
+    "hash": "f872b0f",
+    "date": "2026-07-24T01:24:41+00:00",
+    "version": "0.35",
+    "subject": "Select and delete scene items on the plan"
+  },
+  {
     "hash": "972684c",
     "date": "2026-07-23T20:39:46+00:00",
     "version": "0.34",

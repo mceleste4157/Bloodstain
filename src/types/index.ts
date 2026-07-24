@@ -181,6 +181,14 @@ export interface CasePhoto {
   createdAt?: number;
 }
 
+/** An uploaded floor-plan diagram used as the top-view background. */
+export interface CaseFloorplan {
+  storagePath: string;
+  url: string;
+  /** Background opacity (0–1) for the plan image. */
+  opacity?: number;
+}
+
 /** A full investigation case — the top-level Firestore document. */
 export interface Case {
   id: string;
@@ -200,6 +208,11 @@ export interface Case {
    */
   roomUnit?: LengthUnit;
   room?: Room;
+  /**
+   * Optional uploaded floor-plan diagram shown as the top-view background, so
+   * non-rectangular rooms / whole layouts can be traced instead of modeled.
+   */
+  floorplan?: CaseFloorplan;
   stains: Bloodstain[];
   photos?: CasePhoto[];
 

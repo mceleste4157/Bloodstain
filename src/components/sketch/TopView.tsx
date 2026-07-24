@@ -11,8 +11,19 @@
  *   stains + labels → convergence & area-of-origin markers → scale bar + north.
  */
 
-import { useEffect, useRef } from 'react';
-import { Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Circle,
+  Ellipse,
+  Group,
+  Image as KonvaImage,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Text,
+  Transformer,
+} from 'react-konva';
 import type Konva from 'konva';
 import type { Bloodstain, LengthUnit, Point2D, Room } from '@/types';
 import type { SceneAnalysis } from '@/lib/calculations';
@@ -57,6 +68,29 @@ export interface TopViewProps {
   selectedFurnitureId?: string | null;
   /** Called when the scene-item selection changes (click item / empty space). */
   onSelectFurniture?: (id: string | null) => void;
+  /** Optional floor-plan diagram URL shown as the background. */
+  floorplanUrl?: string;
+  /** Background opacity for the floor-plan image (0–1). */
+  floorplanOpacity?: number;
+}
+
+/** Load a URL into an HTMLImageElement for Konva, or null until ready. */
+function useHtmlImage(url?: string): HTMLImageElement | null {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setImg(null);
+      return;
+    }
+    const image = new window.Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => setImg(image);
+    image.src = url;
+    return () => {
+      image.onload = null;
+    };
+  }, [url]);
+  return img;
 }
 
 export interface FurnitureTransform {
@@ -82,9 +116,13 @@ export function TopView({
   onFurnitureTransform,
   selectedFurnitureId = null,
   onSelectFurniture,
+  floorplanUrl,
+  floorplanOpacity = 1,
 }: TopViewProps) {
   // Top view: x = room width (horizontal), y = room length (vertical).
   const t = fitTransform({ width: room.width, height: room.length }, { width, height });
+  const floorplan = useHtmlImage(floorplanUrl);
+  const origin = project(t, { x: 0, y: 0 });
 
   return (
     <Stage
@@ -101,7 +139,19 @@ export function TopView({
     >
       {/* Always listening so scene items can be dragged without an edit mode. */}
       <Layer listening={true}>
-        {gridMm ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
+        {/* Uploaded floor-plan diagram, filling the room bounds */}
+        {floorplan ? (
+          <KonvaImage
+            image={floorplan}
+            x={origin.x}
+            y={origin.y}
+            width={scaleLength(t, room.width)}
+            height={scaleLength(t, room.length)}
+            opacity={floorplanOpacity}
+            listening={false}
+          />
+        ) : null}
+        {gridMm && !floorplan ? <Grid room={room} t={t} spacingMm={gridMm} /> : null}
         <RoomOutline room={room} t={t} />
         <Fixtures room={room} t={t} />
         <FurnitureItems

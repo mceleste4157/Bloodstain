@@ -23,6 +23,7 @@ import { fitTransform, unproject } from '@/lib/sketch/viewport';
 import { caseRoomUnit, ROOM_UNIT_OPTIONS } from '@/lib/caseUnit';
 import { canRedo, canUndo, initHistory, pushHistory, redo, undo, type History } from '@/lib/history';
 import { deleteCase, updateCase } from '@/lib/firebase/cases';
+import { deletePhotoObject, uploadPhoto } from '@/lib/firebase/photos';
 import { logAudit } from '@/lib/firebase/audit';
 import { useCase } from '@/hooks/useCases';
 import { useAuditLog } from '@/hooks/useAuditLog';
@@ -75,6 +76,8 @@ export default function CaseView() {
   const [snap, setSnap] = useState(true);
   const [show3D, setShow3D] = useState(false);
   const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
+  const [uploadingPlan, setUploadingPlan] = useState(false);
+  const floorplanInputRef = useRef<HTMLInputElement>(null);
 
   // Konva stage refs, used to rasterize the sketches into the PDF report.
   const topViewRef = useRef<Konva.Stage>(null);
@@ -369,6 +372,27 @@ export default function CaseView() {
     });
   }
 
+  /** Upload a floor-plan diagram image and set it as the plan background. */
+  async function handleFloorplanUpload(file: File | undefined) {
+    if (!file || !id || !draft) return;
+    setUploadingPlan(true);
+    try {
+      const photo = await uploadPhoto(file, draft.ownerUid, id);
+      if (photo.url) patch({ floorplan: { storagePath: photo.storagePath, url: photo.url, opacity: 0.85 } });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Floor plan upload failed.');
+    } finally {
+      setUploadingPlan(false);
+      if (floorplanInputRef.current) floorplanInputRef.current.value = '';
+    }
+  }
+
+  async function removeFloorplan() {
+    const fp = draft?.floorplan;
+    if (fp) await deletePhotoObject(fp.storagePath);
+    patch({ floorplan: undefined });
+  }
+
   /** Remove a scene item from the room. */
   function removeFurniture(objId: string) {
     commit((d) =>
@@ -570,6 +594,62 @@ export default function CaseView() {
 
       {/* Room */}
       <Card>
+        {/* Floor-plan diagram upload */}
+        <div className="mb-4 border-b border-surface-border pb-4">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Floor plan diagram (optional)
+          </h2>
+          <input
+            ref={floorplanInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void handleFloorplanUpload(e.target.files?.[0])}
+          />
+          {draft.floorplan ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <img
+                src={draft.floorplan.url}
+                alt="Floor plan"
+                className="h-16 w-24 rounded border border-surface-border object-cover"
+              />
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Opacity
+                <input
+                  type="range"
+                  min={0.2}
+                  max={1}
+                  step={0.05}
+                  value={draft.floorplan.opacity ?? 0.85}
+                  onChange={(e) =>
+                    patch({ floorplan: { ...draft.floorplan!, opacity: Number(e.target.value) } })
+                  }
+                />
+              </label>
+              <Button variant="secondary" onClick={() => floorplanInputRef.current?.click()}>
+                Replace
+              </Button>
+              <button onClick={() => void removeFloorplan()} className="text-xs text-red-400 hover:text-red-300">
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => floorplanInputRef.current?.click()}
+                disabled={uploadingPlan}
+              >
+                {uploadingPlan ? 'Uploading…' : 'Upload floor plan'}
+              </Button>
+              <span className="text-xs text-slate-500">
+                Upload a diagram (e.g. from the property appraiser) to trace stains on — for
+                non-rectangular rooms or whole layouts. Set the room size below to roughly match.
+              </span>
+            </div>
+          )}
+        </div>
+
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Room dimensions ({roomUnit})
         </h2>
@@ -794,6 +874,8 @@ export default function CaseView() {
                 onFurnitureTransform={transformFurniture}
                 selectedFurnitureId={selectedFurnitureId}
                 onSelectFurniture={setSelectedFurnitureId}
+                floorplanUrl={draft.floorplan?.url}
+                floorplanOpacity={draft.floorplan?.opacity ?? 0.85}
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">
